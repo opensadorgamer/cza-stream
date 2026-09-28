@@ -1,15 +1,15 @@
 import { checkSavedSession, registerUser, loginUser, logoutUser, getCurrentUser, setCurrentUser } from './auth.js';
 import { getCurrentRoom, setCurrentRoom, generateRandomRoomCode } from './rooms.js';
-import { initLocalCamera, getLocalStream, toggleAudioTrack, toggleVideoTrack, stopLocalCamera } from './cameraMic.js';
-import { startScreenShare, stopScreenShare, getScreenStream, getIsScreenSharing, setIsScreenSharing } from './screenShare.js';
+import { initLocalCamera, getLocalStream, toggleAudioTrack, toggleVideoTrack, stopLocalCamera, populateAudioDevices } from './cameraMic.js';
+import { startScreenShare, stopScreenShare, getScreenStream, getIsScreenSharing } from './screenShare.js';
 import { initSignalingChannels, cleanupSignalingChannels, sendUserJoinedSignal, sendUserPresenceSignal, sendChatMessageSignal } from './signaling.js';
-import { createPeerConnection, handleSignalingData, replaceVideoTrack, closePeerConnection, getPeerConnection } from './webrtc.js';
+import { createPeerConnectionForUser, handleSignalingData, replaceVideoTrackOnAll, closeAllPeers } from './webrtc.js';
 import { appendChatMessage, appendSystemMessage } from './chat.js';
 import { showScreen, showAuthError, showLobbyError, toggleFullscreen, updateOnlineMembersList, resetOnlineMembers } from './interface.js';
 import { monitorAudioLevel } from './audioIndicator.js';
 
 let localAudioMonitor = null;
-let remoteAudioMonitor = null;
+const remoteAudioMonitors = {};
 
 window.addEventListener('DOMContentLoaded', () => {
     if (checkSavedSession()) {
@@ -75,6 +75,19 @@ window.addEventListener('DOMContentLoaded', () => {
             }
             setCurrentRoom(room);
             await enterCallScreen(room);
+        });
+    }
+
+    const micSelect = document.getElementById('mic-select');
+    if (micSelect) {
+        micSelect.addEventListener('change', async (e) => {
+            const deviceId = e.target.value;
+            await initLocalCamera(deviceId);
+            const stream = getLocalStream();
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack) {
+                await replaceVideoTrackOnAll(videoTrack);
+            }
         });
     }
 
@@ -149,13 +162,13 @@ async function enterCallScreen(room) {
     resetOnlineMembers(currentUser);
     updateOnlineMembersList(currentUser, true);
 
-    // 1. PRIMEIRO: Inicializa a câmera/microfone e aguarda o stream estar pronto
     const stream = await initLocalCamera();
+    await populateAudioDevices('mic-select');
+
     const localVideo = document.getElementById('local-video');
-    
     if (stream && (stream.getVideoTracks().length > 0 || stream.getAudioTracks().length > 0)) {
         localVideo.srcObject = stream;
-        localVideo.muted = true; // Silencia o próprio microfone para evitar eco local
+        localVideo.muted = true;
         localVideo.play().catch(() => {});
         
         if (stream.getVideoTracks().length > 0) {
@@ -167,68 +180,43 @@ async function enterCallScreen(room) {
         document.getElementById('local-placeholder').style.display = 'flex';
     }
 
-    // Monitora áudio local
     const localBox = localVideo.closest('.video-box');
     if (localAudioMonitor) localAudioMonitor.stop();
     localAudioMonitor = monitorAudioLevel(stream, localBox, true);
 
-    // 2. SEGUNDO: Só inicializa a sinalização WebRTC após o stream local estar garantido
+    // Expõe a função globalmente para o webrtc.js renderizar streams remotos dinamicamente
+    window.handleRemoteStreamGlobal = (remoteUser, remoteStream) => {
+        renderRemoteVideo(remoteUser, remoteStream);
+    };
+
     initSignalingChannels(room, currentUser, {
         onChatMessage: (sender, text) => {
             appendChatMessage(document.getElementById('chat-messages'), sender, text, false);
         },
         onSignalData: async (data) => {
-            await handleSignalingData(data, currentUser, (remoteStream) => {
-                document.getElementById('remote-status').style.display = 'none';
-                const remoteVideo = document.getElementById('remote-video');
-                remoteVideo.srcObject = remoteStream;
-                remoteVideo.muted = false; // Garante reprodução de áudio remoto
-                remoteVideo.play().catch(() => {});
-
-                // Monitora áudio remoto
-                const remoteBox = remoteVideo.closest('.video-box');
-                if (remoteAudioMonitor) remoteAudioMonitor.stop();
-                remoteAudioMonitor = monitorAudioLevel(remoteStream, remoteBox, false);
-            }, () => {
-                document.getElementById('remote-status').style.display = 'none';
-            });
+            await handleSignalingData(data, currentUser, window.handleRemoteStreamGlobal);
         },
         onUserJoined: async (remoteName) => {
+            if (remoteName === currentUser) return;
             appendSystemMessage(document.getElementById('chat-messages'), remoteName + ' entrou na sala.');
-            document.getElementById('remote-label').innerText = remoteName;
-            document.getElementById('remote-status-text').innerText = 'Conectando túnel P2P...';
-
             updateOnlineMembersList(remoteName, true);
             sendUserPresenceSignal(currentUser);
 
-            const pc = createPeerConnection(currentUser, (remoteStream) => {
-                document.getElementById('remote-status').style.display = 'none';
-                const remoteVideo = document.getElementById('remote-video');
-                remoteVideo.srcObject = remoteStream;
-                remoteVideo.muted = false;
-                remoteVideo.play().catch(() => {});
-
-                const remoteBox = remoteVideo.closest('.video-box');
-                if (remoteAudioMonitor) remoteAudioMonitor.stop();
-                remoteAudioMonitor = monitorAudioLevel(remoteStream, remoteBox, false);
-            }, () => {
-                document.getElementById('remote-status').style.display = 'none';
-            });
-
+            // Cria conexão individual com o novo participante e envia oferta
+            const pc = createPeerConnectionForUser(remoteName, currentUser, window.handleRemoteStreamGlobal);
             try {
                 if (pc.signalingState === "stable") {
                     const offer = await pc.createOffer();
                     await pc.setLocalDescription(offer);
                     import('./signaling.js').then(mod => {
-                        mod.sendSignal({ type: 'offer', sdp: offer, sender: currentUser });
+                        mod.sendSignal({ type: 'offer', sdp: offer, sender: currentUser, target: remoteName });
                     });
                 }
             } catch (e) {
-                console.error("Erro ao criar oferta WebRTC inicial:", e);
+                console.error(`Erro ao criar oferta para ${remoteName}:`, e);
             }
         },
         onUserPresence: (remoteName) => {
-            document.getElementById('remote-label').innerText = remoteName;
             updateOnlineMembersList(remoteName, true);
         },
         onSubscribed: () => {
@@ -236,6 +224,42 @@ async function enterCallScreen(room) {
             sendUserJoinedSignal(currentUser);
         }
     });
+}
+
+function renderRemoteVideo(remoteUser, remoteStream) {
+    let videoBox = document.getElementById(`remote-box-${remoteUser}`);
+    
+    if (!videoBox) {
+        const grid = document.getElementById('videos-grid');
+        videoBox = document.createElement('div');
+        videoBox.id = `remote-box-${remoteUser}`;
+        videoBox.className = "video-box relative bg-[#111827] rounded-3xl overflow-hidden border border-gray-800 aspect-video flex items-center justify-center shadow-2xl";
+        videoBox.innerHTML = `
+            <video id="remote-video-${remoteUser}" autoplay playsinline class="w-full h-full object-cover"></video>
+            <div class="absolute bottom-3 left-3 bg-[#0b0f19]/80 backdrop-blur-md border border-gray-800 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-gray-200 flex items-center gap-2 z-10">
+                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                <span>${remoteUser}</span>
+            </div>
+            <button class="fullscreen-btn absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-xl text-xs backdrop-blur-md transition cursor-pointer border border-gray-700/50 z-10">
+                <i class="fa-solid fa-expand"></i>
+            </button>
+        `;
+        grid.appendChild(videoBox);
+        
+        videoBox.querySelector('.fullscreen-btn').addEventListener('click', () => {
+            toggleFullscreen(videoBox);
+        });
+    }
+
+    const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
+    if (remoteVideo) {
+        remoteVideo.srcObject = remoteStream;
+        remoteVideo.muted = false;
+        remoteVideo.play().catch(() => {});
+        
+        if (remoteAudioMonitors[remoteUser]) remoteAudioMonitors[remoteUser].stop();
+        remoteAudioMonitors[remoteUser] = monitorAudioLevel(remoteStream, videoBox, false);
+    }
 }
 
 async function handleScreenShareToggle() {
@@ -248,7 +272,7 @@ async function handleScreenShareToggle() {
         const screenTrack = screenStream.getVideoTracks()[0];
 
         btn.classList.add('bg-indigo-600');
-        await replaceVideoTrack(screenTrack);
+        await replaceVideoTrackOnAll(screenTrack);
 
         const localVideo = document.getElementById('local-video');
         localVideo.srcObject = screenStream;
@@ -273,7 +297,7 @@ async function stopScreenShareAction() {
     const videoTrack = localStream ? localStream.getVideoTracks()[0] : null;
 
     if (videoTrack) {
-        await replaceVideoTrack(videoTrack);
+        await replaceVideoTrackOnAll(videoTrack);
     }
 
     const localVideo = document.getElementById('local-video');
@@ -290,10 +314,12 @@ async function stopScreenShareAction() {
 
 function leaveCall() {
     if (localAudioMonitor) localAudioMonitor.stop();
-    if (remoteAudioMonitor) remoteAudioMonitor.stop();
+    Object.keys(remoteAudioMonitors).forEach(user => {
+        if (remoteAudioMonitors[user]) remoteAudioMonitors[user].stop();
+    });
     stopLocalCamera();
     stopScreenShare();
-    closePeerConnection();
+    closeAllPeers();
     cleanupSignalingChannels();
     window.location.reload();
 }
