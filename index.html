@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="./css/style.css">
 </head>
-<body class="text-gray-100 min-h-screen flex flex-col antialiased selection:bg-indigo-600 selection:text-white">
+<body class="text-gray-100 min-h-screen flex flex-col antialiased selection:bg-indigo-600 selection:text-white bg-[#030712]">
 
     <!-- TELA DE AUTENTICAÇÃO -->
     <div id="auth-screen" class="flex-1 flex items-center justify-center p-4 relative overflow-hidden">
@@ -66,6 +66,31 @@
                 <button id="logout-btn" title="Sair da Conta" class="w-10 h-10 rounded-xl bg-gray-800 hover:bg-rose-600/20 text-gray-400 hover:text-rose-400 flex items-center justify-center transition cursor-pointer border border-gray-700">
                     <i class="fa-solid fa-power-off"></i>
                 </button>
+            </div>
+
+            <!-- PAINEL DE PERFIL DO UTILIZADOR INTEGRADO AO SUPABASE -->
+            <div id="user-profile-card" class="bg-black/40 border border-gray-800 p-4 rounded-2xl flex flex-col gap-3 mb-6 shadow-inner">
+                <div class="flex items-center gap-3">
+                    <div id="profile-initial" class="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center font-bold text-indigo-400 text-base">
+                        U
+                    </div>
+                    <div class="flex flex-col truncate">
+                        <span id="profile-username-display" class="text-xs font-semibold text-gray-200 truncate">A carregar perfil...</span>
+                        <span class="text-[10px] text-emerald-400 flex items-center gap-1 font-medium mt-0.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Sincronizado no Supabase
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-1.5 pt-1 border-t border-gray-800/60">
+                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Editar Nome de Utilizador</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="edit-username-input" placeholder="Novo apelido..." class="w-full bg-[#0b0f19] border border-gray-800 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition">
+                        <button id="save-profile-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer shadow-md shadow-indigo-600/30">
+                            Salvar
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="space-y-4">
