@@ -47,3 +47,4 @@ export function monitorAudioLevel(stream, labelElementOrBox, isLocal = false) {
         return null;
     }
 }
+```[cite: 2]
