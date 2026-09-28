@@ -84,3 +84,31 @@ function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/[&<>"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[tag] || tag));
 }
+
+// --- CONTROLE INDEPENDENTE DE VOLUME (VOZ VS TELA) ---
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Slider de Voz (Afeta apenas o áudio das chamadas/microfones)
+    const volumeVozInput = document.getElementById('volumeVoz') || document.querySelector('input[data-volume="voz"]');
+    if (volumeVozInput) {
+        volumeVozInput.addEventListener('input', (e) => {
+            const vol = parseFloat(e.target.value);
+            // Aplica o volume exclusivamente aos elementos de áudio remotos de voz
+            document.querySelectorAll('audio.remote-audio, audio[id^="audio-"]').forEach(audioEl => {
+                audioEl.volume = vol;
+            });
+        });
+    }
+
+    // 2. Slider de Tela (Afeta exclusivamente a transmissão de tela)
+    const volumeTelaInput = document.getElementById('volumeTela') || document.querySelector('input[data-volume="tela"]');
+    if (volumeTelaInput) {
+        volumeTelaInput.addEventListener('input', (e) => {
+            const vol = parseFloat(e.target.value);
+            // Aplica o volume exclusivamente aos elementos de vídeo/áudio da transmissão de tela
+            document.querySelectorAll('video.screen-share-video, video[id^="screen-"]').forEach(videoEl => {
+                videoEl.volume = vol;
+            });
+        });
+    }
+});
+```[cite: 2]
