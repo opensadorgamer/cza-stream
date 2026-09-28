@@ -29,11 +29,16 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
+    // Adiciona as faixas do stream ativo de forma segura
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     if (activeStream && activeStream.getTracks().length > 0) {
         activeStream.getTracks().forEach(track => {
             pc.addTrack(track, activeStream);
         });
+    } else {
+        // Garante transceptores padrão caso o stream ainda esteja a carregar
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+        pc.addTransceiver('video', { direction: 'sendrecv' });
     }
 
     pc.onicecandidate = event => {
@@ -98,7 +103,7 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
         } else if (data.type === 'candidate') {
             if (data.candidate) {
-                if (pc.remoteDescription) {
+                if (pc.remoteDescription && pc.remoteDescription.type) {
                     await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
                 } else {
                     if (!iceCandidateQueues[remoteUser]) iceCandidateQueues[remoteUser] = [];
