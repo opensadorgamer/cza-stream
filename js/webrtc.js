@@ -142,6 +142,22 @@ export async function replaceVideoTrackOnAll(newVideoTrack) {
                 pc.addTrack(newVideoTrack, screenStream);
             }
         }
+
+        // Restaura a renegociação segura para avisar o peer remoto da nova faixa de vídeo/tela
+        try {
+            if (pc.signalingState === "stable") {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                sendSignal({
+                    type: 'offer',
+                    sdp: offer,
+                    sender: currentUserGlobal,
+                    target: remoteUser
+                });
+            }
+        } catch (e) {
+            console.error(`Erro ao renegociar faixa de vídeo com ${remoteUser}:`, e);
+        }
     }
 }
 
