@@ -29,7 +29,6 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Adiciona transceptores de áudio e vídeo preventivos para fixar as m-lines desde o início
     pc.addTransceiver('audio', { direction: 'sendrecv' });
     pc.addTransceiver('video', { direction: 'sendrecv' });
 
@@ -143,13 +142,10 @@ export async function replaceVideoTrackOnAll(newVideoTrack) {
                 pc.addTrack(newVideoTrack, screenStream);
             }
         }
-
-        // Removemos a renegociação forçada desnecessária aqui para evitar colisão de SSL role,
-        // pois o replaceTrack já atualiza o fluxo diretamente nos transceptores existentes.
     }
 }
 
-export function closeAllPeer() {
+export function closeAllPeers() {
     Object.keys(peers).forEach(remoteUser => {
         if (peers[remoteUser]) {
             peers[remoteUser].close();
@@ -158,8 +154,4 @@ export function closeAllPeer() {
     });
     peers = {};
     iceCandidateQueues = {};
-}
-
-export function closeAllPeers() {
-    closeAllPeer();
 }
