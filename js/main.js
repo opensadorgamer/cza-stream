@@ -165,6 +165,14 @@ async function enterCallScreen(room) {
     const stream = await initLocalCamera();
     await populateAudioDevices('mic-select');
 
+    // Sincroniza o botão do microfone para garantir que ele comece ativo e sem estar vermelho
+    const micBtn = document.getElementById('mic-btn');
+    if (micBtn && stream && stream.getAudioTracks().length > 0) {
+        stream.getAudioTracks()[0].enabled = true;
+        micBtn.classList.remove('bg-rose-600');
+        micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+    }
+
     const localVideo = document.getElementById('local-video');
     if (stream && (stream.getVideoTracks().length > 0 || stream.getAudioTracks().length > 0)) {
         localVideo.srcObject = stream;
@@ -184,7 +192,6 @@ async function enterCallScreen(room) {
     if (localAudioMonitor) localAudioMonitor.stop();
     localAudioMonitor = monitorAudioLevel(stream, localBox, true);
 
-    // Expõe a função globalmente para o webrtc.js renderizar streams remotos dinamicamente
     window.handleRemoteStreamGlobal = (remoteUser, remoteStream) => {
         renderRemoteVideo(remoteUser, remoteStream);
     };
@@ -202,7 +209,6 @@ async function enterCallScreen(room) {
             updateOnlineMembersList(remoteName, true);
             sendUserPresenceSignal(currentUser);
 
-            // Cria conexão individual com o novo participante e envia oferta
             const pc = createPeerConnectionForUser(remoteName, currentUser, window.handleRemoteStreamGlobal);
             try {
                 if (pc.signalingState === "stable") {
@@ -259,6 +265,23 @@ function renderRemoteVideo(remoteUser, remoteStream) {
         
         if (remoteAudioMonitors[remoteUser]) remoteAudioMonitors[remoteUser].stop();
         remoteAudioMonitors[remoteUser] = monitorAudioLevel(remoteStream, videoBox, false);
+
+        // Adiciona controle deslizante de volume individual para este usuário (se já não existir)
+        let volumeControl = videoBox.querySelector('.volume-slider-container');
+        if (!volumeControl) {
+            volumeControl = document.createElement('div');
+            volumeControl.className = 'volume-slider-container absolute top-3 left-3 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-gray-700/50 px-2.5 py-1.5 rounded-xl text-xs text-white flex items-center gap-2 z-10 transition';
+            volumeControl.innerHTML = `
+                <i class="fa-solid fa-volume-high text-[10px]"></i>
+                <input type="range" min="0" max="1" step="0.05" value="1" class="w-16 cursor-pointer accent-indigo-500">
+            `;
+            videoBox.appendChild(volumeControl);
+
+            const slider = volumeControl.querySelector('input');
+            slider.addEventListener('input', (e) => {
+                remoteVideo.volume = e.target.value;
+            });
+        }
     }
 }
 
