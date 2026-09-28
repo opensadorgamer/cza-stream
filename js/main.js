@@ -291,7 +291,13 @@ function renderRemoteVideo(remoteUser, remoteStream) {
         videoBox.id = `remote-box-${remoteUser}`;
         videoBox.className = "video-box relative bg-gray-900/80 backdrop-blur-xl rounded-2xl overflow-hidden border border-gray-800/80 aspect-video flex items-center justify-center shadow-2xl transition-all duration-300";
         videoBox.innerHTML = `
-            <video id="remote-video-${remoteUser}" autoplay playsinline class="w-full h-full object-cover"></video>
+            <!-- Vídeo limpo e isolado (estritamente imagem, silenciado) -->
+            <video id="remote-video-${remoteUser}" autoplay playsinline muted class="w-full h-full object-contain"></video>
+            
+            <!-- Áudio isolado da Voz do participante -->
+            <audio id="remote-mic-audio-${remoteUser}" autoplay playsinline></audio>
+            
+            <!-- Áudio isolado da Tela Compartilhada (Sistema / Jogo) -->
             <audio id="remote-screen-audio-${remoteUser}" autoplay playsinline></audio>
 
             <div class="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md border border-gray-700/50 px-3 py-1.5 rounded-xl text-xs font-medium text-gray-200 flex items-center gap-2 z-10">
@@ -303,7 +309,7 @@ function renderRemoteVideo(remoteUser, remoteStream) {
                 <i class="fa-solid fa-expand"></i>
             </button>
 
-            <!-- Painel de volumes separados por voz e tela -->
+            <!-- Painel de volumes 100% independentes (Voz vs Tela) -->
             <div class="absolute top-3 left-3 flex flex-col gap-1.5 bg-black/70 hover:bg-black/90 backdrop-blur-md border border-gray-700/50 p-2 rounded-xl text-[11px] text-white z-10 transition shadow-lg">
                 <div class="flex items-center gap-2">
                     <i class="fa-solid fa-microphone text-indigo-400 w-3"></i>
@@ -323,43 +329,55 @@ function renderRemoteVideo(remoteUser, remoteStream) {
             toggleFullscreen(videoBox);
         });
 
-        // Configuração dos eventos de input para os sliders
+        // Controles de volume totalmente independentes
         const micSlider = document.getElementById(`vol-mic-${remoteUser}`);
         const screenSlider = document.getElementById(`vol-screen-${remoteUser}`);
-        const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
+        const remoteMicAudio = document.getElementById(`remote-mic-audio-${remoteUser}`);
         const remoteScreenAudio = document.getElementById(`remote-screen-audio-${remoteUser}`);
 
         micSlider.addEventListener('input', (e) => {
-            if (remoteVideo) remoteVideo.volume = e.target.value;
+            const val = parseFloat(e.target.value);
+            if (remoteMicAudio) remoteMicAudio.volume = val;
         });
 
         screenSlider.addEventListener('input', (e) => {
-            if (remoteScreenAudio) remoteScreenAudio.volume = e.target.value;
+            const val = parseFloat(e.target.value);
+            if (remoteScreenAudio) remoteScreenAudio.volume = val;
         });
     }
 
     const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
+    const remoteMicAudio = document.getElementById(`remote-mic-audio-${remoteUser}`);
     const remoteScreenAudio = document.getElementById(`remote-screen-audio-${remoteUser}`);
 
-    if (remoteVideo && remoteScreenAudio) {
+    if (remoteVideo && remoteMicAudio && remoteScreenAudio) {
         const audioTracks = remoteStream.getAudioTracks();
         const videoTracks = remoteStream.getVideoTracks();
 
-        // Sempre atribui o stream completo ao elemento de vídeo principal (reproduz a voz e a imagem)
-        if (videoTracks.length > 0 || audioTracks.length > 0) {
-            remoteVideo.srcObject = remoteStream;
-            remoteVideo.muted = false;
+        // 1. Atribui apenas o vídeo de forma isolada e em mudo
+        if (videoTracks.length > 0) {
+            remoteVideo.srcObject = new MediaStream([videoTracks[0]]);
+            remoteVideo.muted = true;
             remoteVideo.play().catch(() => {});
+        } else {
+            remoteVideo.srcObject = null;
         }
 
-        // Se o utilizador remoto estiver a transmitir o áudio do sistema/jogo (segunda faixa de áudio)
+        // 2. Atribui a voz (primeira faixa de áudio) ao elemento do microfone
+        if (audioTracks.length > 0) {
+            remoteMicAudio.srcObject = new MediaStream([audioTracks[0]]);
+            remoteMicAudio.muted = false;
+            remoteMicAudio.play().catch(() => {});
+        } else {
+            remoteMicAudio.srcObject = null;
+        }
+
+        // 3. Atribui o áudio da transmissão (segunda faixa de áudio) ao elemento dedicado da tela
         if (audioTracks.length > 1) {
-            const screenAudioStream = new MediaStream([audioTracks[1]]);
-            remoteScreenAudio.srcObject = screenAudioStream;
+            remoteScreenAudio.srcObject = new MediaStream([audioTracks[1]]);
             remoteScreenAudio.muted = false;
             remoteScreenAudio.play().catch(() => {});
         } else {
-            // Se não houver áudio de tela, limpa o elemento de áudio dedicado para evitar conflitos
             remoteScreenAudio.srcObject = null;
         }
         
