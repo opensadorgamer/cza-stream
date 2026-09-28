@@ -329,7 +329,6 @@ function renderRemoteVideo(remoteUser, remoteStream) {
             toggleFullscreen(videoBox);
         });
 
-        // Controles de volume totalmente independentes
         const micSlider = document.getElementById(`vol-mic-${remoteUser}`);
         const screenSlider = document.getElementById(`vol-screen-${remoteUser}`);
         const remoteMicAudio = document.getElementById(`remote-mic-audio-${remoteUser}`);
@@ -345,6 +344,53 @@ function renderRemoteVideo(remoteUser, remoteStream) {
             if (remoteScreenAudio) remoteScreenAudio.volume = val;
         });
     }
+
+    const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
+    const remoteMicAudio = document.getElementById(`remote-mic-audio-${remoteUser}`);
+    const remoteScreenAudio = document.getElementById(`remote-screen-audio-${remoteUser}`);
+
+    if (remoteVideo && remoteMicAudio && remoteScreenAudio) {
+        const audioTracks = remoteStream.getAudioTracks();
+        const videoTracks = remoteStream.getVideoTracks();
+
+        // 1. Atribui apenas o vídeo de forma isolada e em mudo
+        if (videoTracks.length > 0) {
+            remoteVideo.srcObject = new MediaStream([videoTracks[0]]);
+            remoteVideo.muted = true;
+            remoteVideo.play().catch(() => {});
+        } else {
+            remoteVideo.srcObject = null;
+        }
+
+        // 2. Garante que a voz (microfone) seja reproduzida. 
+        // Se houver mais de uma faixa de áudio, a primeira é a voz e a segunda é a tela. Se houver apenas uma, é a voz.
+        if (audioTracks.length > 0) {
+            const micStream = new MediaStream([audioTracks[0]]);
+            if (remoteMicAudio.srcObject !== micStream) {
+                remoteMicAudio.srcObject = micStream;
+                remoteMicAudio.muted = false;
+                remoteMicAudio.play().catch(() => {});
+            }
+        } else {
+            remoteMicAudio.srcObject = null;
+        }
+
+        // 3. Atribui o áudio da transmissão de tela (segunda faixa de áudio, se existir)
+        if (audioTracks.length > 1) {
+            const screenStream = new MediaStream([audioTracks[1]]);
+            if (remoteScreenAudio.srcObject !== screenStream) {
+                remoteScreenAudio.srcObject = screenStream;
+                remoteScreenAudio.muted = false;
+                remoteScreenAudio.play().catch(() => {});
+            }
+        } else {
+            remoteScreenAudio.srcObject = null;
+        }
+        
+        if (remoteAudioMonitors[remoteUser]) remoteAudioMonitors[remoteUser].stop();
+        remoteAudioMonitors[remoteUser] = monitorAudioLevel(remoteStream, videoBox, false);
+    }
+}
 
     const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
     const remoteMicAudio = document.getElementById(`remote-mic-audio-${remoteUser}`);
