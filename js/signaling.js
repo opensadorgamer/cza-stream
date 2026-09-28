@@ -1,4 +1,4 @@
-import supabase from './supabaseClient.js';
+import { supabase } from './supabaseClient.js';
 
 let channel = null;
 
@@ -14,7 +14,6 @@ export function initSignalingChannels(roomCode, currentUser, callbacks) {
     channel
         .on('broadcast', { event: 'webrtc-signal' }, payload => {
             const data = payload.payload;
-            // Só processa se o sinal for destinado a mim ou for broadcast geral
             if (!data.target || data.target === currentUser) {
                 if (callbacks.onSignalData) callbacks.onSignalData(data);
             }
