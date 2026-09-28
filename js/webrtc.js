@@ -46,6 +46,21 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
         });
     }
 
+    // Aplicação de bitrate otimizado para qualidade máxima em 1080p60 sem travar
+    setTimeout(() => {
+        const senders = pc.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (videoSender) {
+            const parameters = videoSender.getParameters();
+            if (!parameters.encodings) {
+                parameters.encodings = [{}];
+            }
+            parameters.encodings[0].maxBitrate = 4500000; // 4.5 Mbps para nitidez perfeita de cinema
+            parameters.encodings[0].maxFramerate = 60;
+            videoSender.setParameters(parameters).catch(e => console.warn("Erro ao definir parâmetros de vídeo:", e));
+        }
+    }, 1000);
+
     pc.onicecandidate = event => {
         if (event.candidate) {
             sendSignal({
@@ -142,6 +157,17 @@ export async function replaceVideoTrackOnAll(newVideoTrack, newAudioTrack = null
             } else {
                 pc.addTrack(newAudioTrack, getScreenStream());
             }
+        }
+
+        // Garante o ajuste de bitrate atualizado na substituição de faixas
+        const updatedSenders = pc.getSenders();
+        const updatedVideoSender = updatedSenders.find(s => s.track && s.track.kind === 'video');
+        if (updatedVideoSender) {
+            const parameters = updatedVideoSender.getParameters();
+            if (!parameters.encodings) parameters.encodings = [{}];
+            parameters.encodings[0].maxBitrate = 4500000;
+            parameters.encodings[0].maxFramerate = 60;
+            updatedVideoSender.setParameters(parameters).catch(() => {});
         }
 
         try {
