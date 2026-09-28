@@ -29,22 +29,11 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Obtém o stream ativo (tela compartilhada ou microfone/câmara local)
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
-    
-    if (activeStream && activeStream.getTracks().length > 0) {
+    if (activeStream) {
         activeStream.getTracks().forEach(track => {
             pc.addTrack(track, activeStream);
         });
-    } else {
-        const fallbackStream = getLocalStream();
-        if (fallbackStream && fallbackStream.getAudioTracks().length > 0) {
-            fallbackStream.getAudioTracks().forEach(track => {
-                pc.addTrack(track, fallbackStream);
-            });
-        } else {
-            pc.addTransceiver('audio', { direction: 'sendrecv' });
-        }
     }
 
     pc.onicecandidate = event => {
@@ -79,13 +68,9 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
 
     try {
         if (data.type === 'offer') {
-            // Evita colisão de estados se já houver uma negociação em curso
-            const collision = data.type === 'offer' && (pc.signalingState !== "stable");
-            
-            if (collision) {
+            if (pc.signalingState !== "stable") {
                 await pc.setLocalDescription({ type: "rollback" }).catch(() => {});
             }
-
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
 
             while (iceCandidateQueues[remoteUser] && iceCandidateQueues[remoteUser].length > 0) {
@@ -113,7 +98,7 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
         } else if (data.type === 'candidate') {
             if (data.candidate) {
-                if (pc.remoteDescription && pc.remoteDescription.type) {
+                if (pc.remoteDescription) {
                     await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
                 } else {
                     if (!iceCandidateQueues[remoteUser]) iceCandidateQueues[remoteUser] = [];
@@ -122,7 +107,7 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
         }
     } catch (e) {
-        console.warn(`Sinalização gerida para ${remoteUser}:`, e);
+        console.error(`Erro de sinalização com ${remoteUser}:`, e);
     }
 }
 
