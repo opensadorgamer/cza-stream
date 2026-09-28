@@ -4,8 +4,18 @@ let isScreenSharing = false;
 export async function startScreenShare() {
     try {
         screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { cursor: "always" },
-            audio: true // Captura o áudio do sistema/jogo junto com a tela
+            video: { 
+                cursor: "always",
+                width: { ideal: 1920, max: 3840 },
+                height: { ideal: 1080, max: 2160 },
+                frameRate: { ideal: 60, max: 60 }
+            },
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                channelCount: 2
+            }
         });
         isScreenSharing = true;
         return screenStream;
