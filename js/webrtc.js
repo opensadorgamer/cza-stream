@@ -2,9 +2,9 @@ import { sendSignal } from './signaling.js';
 import { getLocalStream } from './cameraMic.js';
 import { getScreenStream, getIsScreenSharing } from './screenShare.js';
 
-let peers = {}; // Ex: { 'ari2': RTCPeerConnection, 'ari3': RTCPeerConnection }
+let peers = {};
 let iceCandidateQueues = {};
-let currentUserGlobal = null; // Armazena o utilizador atual para uso interno nas renegociações
+let currentUserGlobal = null;
 
 const rtcConfig = {
     iceServers: [
@@ -29,7 +29,6 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Adiciona as faixas locais ativas (Áudio e Vídeo/Tela)
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     if (activeStream) {
         activeStream.getTracks().forEach(track => {
@@ -112,42 +111,35 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
     }
 }
 
-// CORREÇÃO ROBUSTA: Substitui o vídeo ou adiciona a faixa e força renegociação automática se necessário
 export async function replaceVideoTrackOnAll(newTrack) {
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     
     for (const remoteUser of Object.keys(peers)) {
         const pc = peers[remoteUser];
         const senders = pc.getSenders();
-        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-
-        if (videoSender) {
-            // Se já existe um remetente de vídeo, apenas substitui a faixa em tempo real
-            await videoSender.replaceTrack(newTrack);
-        } else if (newTrack && activeStream) {
-            // Se não existe (ex: PC sem webcam a iniciar partilha de tela), adiciona a faixa e renegocia
-            activeStream.getTracks().forEach(track => {
-                // Evita adicionar faixas duplicadas que já existam
-                if (!senders.some(s => s.track === track)) {
-                    pc.addTrack(track, activeStream);
-                }
-            });
-
-            // Dispara nova oferta (renegociação) para que o outro peer receba a nova faixa de vídeo
-            try {
-                if (pc.signalingState === "stable") {
-                    const offer = await pc.createOffer();
-                    await pc.setLocalDescription(offer);
-                    sendSignal({
-                        type: 'offer',
-                        sdp: offer,
-                        sender: currentUserGlobal,
-                        target: remoteUser
-                    });
-                }
-            } catch (e) {
-                console.error(`Erro ao renegociar faixa de vídeo com ${remoteUser}:`, e);
+        
+        activeStream.getTracks().forEach(track => {
+            const sender = senders.find(s => s.track && s.track.kind === track.kind);
+            if (sender) {
+                sender.replaceTrack(track);
+            } else {
+                pc.addTrack(track, activeStream);
             }
+        });
+
+        try {
+            if (pc.signalingState === "stable") {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                sendSignal({
+                    type: 'offer',
+                    sdp: offer,
+                    sender: currentUserGlobal,
+                    target: remoteUser
+                });
+            }
+        } catch (e) {
+            console.error(`Erro ao renegociar faixas com ${remoteUser}:`, e);
         }
     }
 }
