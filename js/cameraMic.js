@@ -5,16 +5,22 @@ export async function initLocalCamera(audioDeviceId = null) {
     try {
         currentAudioDeviceId = audioDeviceId;
         
-        // Restrições limpas e diretas compatíveis com qualquer microfone de PC no navegador
+        // Mapeia corretamente o ID do microfone externo (USB/Wireless) selecionado pelo utilizador
         const audioConstraints = audioDeviceId ? { 
-            deviceId: { exact: audioDeviceId }
-        } : true;
+            deviceId: { exact: audioDeviceId },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        } : {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        };
 
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
         if (!isMobile) {
-            console.log("Navegador em PC: a abrir stream de áudio limpo...");
-            // No PC, pedimos estritamente apenas áudio puro sem filtros excessivos
+            console.log("A abrir microfone (nativo ou externo/USB):", audioDeviceId || "Padrão");
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
             
             if (localStream.getAudioTracks().length > 0) {
@@ -23,19 +29,14 @@ export async function initLocalCamera(audioDeviceId = null) {
             return localStream;
         }
 
-        // Se for telemóvel, abre câmara e áudio
-        console.log("Navegador em Telemóvel: a solicitar câmara e áudio...");
+        // Telemóvel
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({ 
-                video: true, 
-                audio: audioConstraints 
-            });
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
             if (localStream.getAudioTracks().length > 0) {
                 localStream.getAudioTracks()[0].enabled = true;
             }
             return localStream;
         } catch (videoErr) {
-            console.warn("Telemóvel sem câmara, a abrir apenas áudio...", videoErr);
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
             if (localStream.getAudioTracks().length > 0) {
                 localStream.getAudioTracks()[0].enabled = true;
@@ -44,9 +45,15 @@ export async function initLocalCamera(audioDeviceId = null) {
         }
 
     } catch (err) {
-        console.error("Erro crítico ao aceder ao microfone no navegador:", err);
-        localStream = new MediaStream();
-        return localStream;
+        console.error("Erro ao aceder ao microfone selecionado:", err);
+        // Fallback de segurança absoluto caso o dispositivo específico falhe
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+            return localStream;
+        } catch (e) {
+            localStream = new MediaStream();
+            return localStream;
+        }
     }
 }
 
@@ -55,6 +62,8 @@ export async function populateAudioDevices(selectElementId) {
     if (!select) return;
 
     try {
+        // IMPORTANTE: Para o navegador dar o nome real dos microfones USB/Wireless e permitir acesso,
+        // o getUserMedia precisa de ter sido chamado pelo menos uma vez antes.
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(device => device.kind === 'audioinput');
 
@@ -62,7 +71,8 @@ export async function populateAudioDevices(selectElementId) {
         audioInputs.forEach((device, index) => {
             const option = document.createElement('option');
             option.value = device.deviceId;
-            option.text = device.label || `Microfone ${index + 1}`;
+            // Se o label vier vazio (permissão restrita), dá um nome amigável
+            option.text = device.label || `Microfone Externo / USB ${index + 1}`;
             select.appendChild(option);
         });
 
