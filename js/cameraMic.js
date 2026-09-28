@@ -4,31 +4,32 @@ let currentAudioDeviceId = null;
 export async function initLocalCamera(audioDeviceId = null) {
     try {
         currentAudioDeviceId = audioDeviceId;
-        const audioConstraints = audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true;
+        const audioConstraints = audioDeviceId ? { 
+            deviceId: { exact: audioDeviceId },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        } : {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        };
 
-        // 1. Verifica se o aparelho tem hardware de vídeo (câmara) disponível
-        let hasVideoInput = false;
-        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            hasVideoInput = devices.some(device => device.kind === 'videoinput');
+        console.log("A solicitar acesso ao microfone com constraints limpas...");
+        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
+        
+        if (localStream.getAudioTracks().length > 0) {
+            localStream.getAudioTracks()[0].enabled = true;
         }
 
-        if (!hasVideoInput) {
-            console.log("Nenhuma câmara detetada neste dispositivo. A solicitar apenas áudio...");
-            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
-            return localStream;
-        }
-
-        // 2. Se tiver câmara (ex: telemóvel), tenta abrir com vídeo e áudio
-        console.log("Câmara detetada. A solicitar vídeo e áudio...");
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
         return localStream;
-
     } catch (err) {
-        console.warn("Falha ao abrir câmara ou microfone com restrições, a tentar fallback universal...", err);
+        console.warn("Falha ao abrir microfone específico, a tentar padrão...", err);
         try {
-            // Fallback total de segurança: tenta abrir apenas áudio se falhar o vídeo
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+            if (localStream.getAudioTracks().length > 0) {
+                localStream.getAudioTracks()[0].enabled = true;
+            }
             return localStream;
         } catch (audioErr) {
             console.error("Erro crítico: Microfone indisponível ou negado:", audioErr);
@@ -76,11 +77,6 @@ export function toggleAudioTrack() {
 }
 
 export function toggleVideoTrack() {
-    const track = localStream ? localStream.getVideoTracks()[0] : null;
-    if (track) {
-        track.enabled = !track.enabled;
-        return track.enabled;
-    }
     return false;
 }
 
