@@ -29,6 +29,7 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
+    // Adiciona explicitamente o stream local (seja áudio do PC ou áudio+vídeo do telemóvel)
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     if (activeStream) {
         activeStream.getTracks().forEach(track => {
