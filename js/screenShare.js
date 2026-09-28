@@ -7,12 +7,11 @@ export async function startScreenShare() {
             video: {
                 cursor: "always",
                 displaySurface: "monitor",
-                // Força resoluções e taxa de quadros estáveis para evitar engasgos na transmissão
-                width: { max: 1920, ideal: 1280 },
-                height: { max: 1080, ideal: 720 },
-                frameRate: { max: 30, ideal: 30 },
-                // Prioriza movimento fluido em vez de imagem estática (ótimo para jogos)
-                resizeMode: "crop-and-scale"
+                // Qualidade máxima ideal: 1080p a 60 FPS para imagem perfeita e fluida em jogos
+                width: { ideal: 1920, max: 1920 },
+                height: { ideal: 1080, max: 1080 },
+                frameRate: { ideal: 60, max: 60 },
+                resizeMode: "none" // Mantém a resolução nativa sem cortes automáticos feios
             },
             audio: {
                 echoCancellation: true,
@@ -24,7 +23,6 @@ export async function startScreenShare() {
 
         const screenStream = await navigator.mediaDevices.getDisplayMedia(constraints);
         
-        // Garante que se o usuário clicar no botão nativo de parar compartilhamento, o stream encerre limpo
         screenStream.getVideoTracks()[0].onended = () => {
             console.log("Compartilhamento de tela encerrado pelo usuário.");
         };
