@@ -165,7 +165,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Função para gerir o carregamento e edição do perfil do utilizador via Supabase
 async function initUserProfileView() {
     try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -374,10 +373,12 @@ async function handleScreenShareToggle() {
     if (!isSharing) {
         const screenStream = await startScreenShare();
         if (!screenStream) return;
+        
         const screenTrack = screenStream.getVideoTracks()[0];
+        const screenAudioTrack = screenStream.getAudioTracks().length > 0 ? screenStream.getAudioTracks()[0] : null;
 
         btn.classList.add('bg-indigo-600');
-        await replaceVideoTrackOnAll(screenTrack);
+        await replaceVideoTrackOnAll(screenTrack, screenAudioTrack);
 
         const localVideo = document.getElementById('local-video');
         localVideo.srcObject = screenStream;
@@ -403,7 +404,7 @@ async function stopScreenShareAction() {
     const videoTrack = localStream ? localStream.getVideoTracks()[0] : null;
 
     if (videoTrack) {
-        await replaceVideoTrackOnAll(videoTrack);
+        await replaceVideoTrackOnAll(videoTrack, null);
     }
 
     const localVideo = document.getElementById('local-video');
