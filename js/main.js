@@ -90,10 +90,9 @@ const micSelect = document.getElementById('mic-select');
                 const newAudioTrack = stream.getAudioTracks()[0];
                 newAudioTrack.enabled = true;
 
-                // Atualiza o track e força renegociação SDP com os peers para o som chegar ao outro PC
+                // Atualiza a faixa de áudio em tempo real em todas as conexões ativas
                 import('./webrtc.js').then(async (webrtcMod) => {
                     const peers = webrtcMod.getPeers();
-                    const currentUser = getCurrentUser();
 
                     for (const remoteUser of Object.keys(peers)) {
                         const pc = peers[remoteUser];
@@ -104,19 +103,6 @@ const micSelect = document.getElementById('mic-select');
                             await audioSender.replaceTrack(newAudioTrack);
                         } else {
                             pc.addTrack(newAudioTrack, stream);
-                        }
-
-                        // Força o envio de uma nova oferta para garantir que o outro lado recebe o áudio limpo
-                        try {
-                            if (pc.signalingState === "stable") {
-                                const offer = await pc.createOffer();
-                                await pc.setLocalDescription(offer);
-                                import('./signaling.js').then(sigMod => {
-                                    sigMod.sendSignal({ type: 'offer', sdp: offer, sender: currentUser, target: remoteUser });
-                                });
-                            }
-                        } catch (err) {
-                            console.error(`Erro ao renegociar áudio com ${remoteUser}:`, err);
                         }
                     }
                 });
