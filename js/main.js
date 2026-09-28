@@ -7,7 +7,8 @@ import { createPeerConnectionForUser, handleSignalingData, replaceVideoTrackOnAl
 import { appendChatMessage, appendSystemMessage } from './chat.js';
 import { showScreen, showAuthError, showLobbyError, toggleFullscreen, updateOnlineMembersList, resetOnlineMembers } from './interface.js';
 import { monitorAudioLevel } from './audioIndicator.js';
-import { fetchUserProfile } from './supabaseClient.js';
+import { fetchUserProfile, updateUserProfile } from './supabaseClient.js';
+import { supabase } from './supabaseClient.js';
 
 let localAudioMonitor = null;
 const remoteAudioMonitors = {};
@@ -18,11 +19,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         const username = getCurrentUser();
         const loggedEl = document.getElementById('logged-user-name');
         if (loggedEl) loggedEl.innerText = username;
+        await initUserProfileView();
     } else {
         showScreen('auth-screen');
     }
 
-    // Configuração dos botões de autenticação, sala e controlos
     const loginBtn = document.getElementById('login-btn');
     if (loginBtn) {
         loginBtn.addEventListener('click', async () => {
@@ -32,6 +33,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 await loginUser(username, password);
                 showScreen('lobby-screen');
                 document.getElementById('logged-user-name').innerText = getCurrentUser();
+                await initUserProfileView();
             } catch (e) {
                 showAuthError(e.message);
             }
@@ -47,6 +49,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 await registerUser(username, password);
                 showScreen('lobby-screen');
                 document.getElementById('logged-user-name').innerText = getCurrentUser();
+                await initUserProfileView();
             } catch (e) {
                 showAuthError(e.message);
             }
@@ -162,6 +165,46 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+// Função para gerir o carregamento e edição do perfil do utilizador via Supabase
+async function initUserProfileView() {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const profile = await fetchUserProfile(user.id);
+        if (profile) {
+            const usernameDisplay = document.getElementById('profile-username-display');
+            const initialEl = document.getElementById('profile-initial');
+            const editInput = document.getElementById('edit-username-input');
+
+            if (usernameDisplay) usernameDisplay.innerText = profile.username;
+            if (initialEl) initialEl.innerText = profile.username.charAt(0).toUpperCase();
+            if (editInput) editInput.value = profile.username;
+        }
+
+        const saveBtn = document.getElementById('save-profile-btn');
+        if (saveBtn && !saveBtn.hasAttribute('data-bound')) {
+            saveBtn.setAttribute('data-bound', 'true');
+            saveBtn.addEventListener('click', async () => {
+                const newUsername = document.getElementById('edit-username-input').value.trim();
+                if (!newUsername) return;
+
+                const success = await updateUserProfile(user.id, { username: newUsername });
+                if (success) {
+                    alert('Perfil atualizado com sucesso!');
+                    if (document.getElementById('profile-username-display')) {
+                        document.getElementById('profile-username-display').innerText = newUsername;
+                    }
+                } else {
+                    alert('Erro ao atualizar perfil. Tente outro nome.');
+                }
+            });
+        }
+    } catch (e) {
+        console.error("Erro ao inicializar perfil:", e);
+    }
+}
+
 async function enterCallScreen(room) {
     const currentUser = getCurrentUser();
     showScreen('call-screen');
@@ -240,7 +283,6 @@ async function enterCallScreen(room) {
     });
 }
 
-// Renderização dos utilizadores remotos com controles de volume independentes para Voz e Tela
 function renderRemoteVideo(remoteUser, remoteStream) {
     let videoBox = document.getElementById(`remote-box-${remoteUser}`);
     
