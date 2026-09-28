@@ -2,13 +2,13 @@ let localStream = null;
 
 export async function initLocalCamera() {
     try {
-        // Tenta capturar vídeo e áudio simultaneamente
+        // Tenta capturar vídeo e áudio simultaneamente (para notebooks/dispositivos com câmara)
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         return localStream;
     } catch (err) {
-        console.warn("Câmera indisponível ou não autorizada. Tentando apenas áudio...", err);
+        console.warn("Câmera indisponível ou não autorizada. A tentar apenas áudio...", err);
         try {
-            // Fallback: Se falhar (ex: sem webcam no PC), tenta capturar APENAS o microfone
+            // Fallback limpo: Pede explicitamente APENAS o microfone (video: false)
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
             return localStream;
         } catch (audioErr) {
