@@ -177,6 +177,13 @@
 
             <!-- Controles de Mídia -->
             <div class="flex justify-center items-center gap-3 bg-[#111827]/80 backdrop-blur-md border border-gray-800 p-3 rounded-2xl shadow-2xl">
+                <!-- Seletor de Microfone -->
+                <div class="relative">
+                    <select id="mic-select" title="Selecionar Microfone" class="bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs px-3 py-3 rounded-xl border border-gray-700 focus:outline-none transition cursor-pointer max-w-[140px] truncate">
+                        <option value="">Microfone Padrão</option>
+                    </select>
+                </div>
+
                 <button id="mic-btn" title="Mutar Microfone" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 flex items-center justify-center transition cursor-pointer text-sm">
                     <i class="fa-solid fa-microphone"></i>
                 </button>
