@@ -7,11 +7,11 @@ export async function startScreenShare() {
             video: {
                 cursor: "always",
                 displaySurface: "monitor",
-                // Força resolução nítida em Full HD com taxa de quadros fluida para jogos
+                // 1080p nativo mantido, mas com 30 FPS estáveis para acabar com o efeito de "lag/teleporte"
                 width: { ideal: 1920, max: 1920 },
                 height: { ideal: 1080, max: 1080 },
-                frameRate: { ideal: 60, max: 60 },
-                resizeMode: "none" // Evita reescalonamento automático que borra a imagem
+                frameRate: { ideal: 30, max: 30 },
+                resizeMode: "none"
             },
             audio: {
                 echoCancellation: true,
@@ -21,13 +21,11 @@ export async function startScreenShare() {
             }
         };
 
-        // Captura o fluxo de tela do sistema/jogo
         const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
         
         screenStream = stream;
         isScreenSharing = true;
 
-        // Trata o encerramento nativo da partilha de tela (botão de parar do navegador)
         screenStream.getVideoTracks()[0].onended = () => {
             console.log("Compartilhamento de tela encerrado pelo usuário.");
             stopScreenShare();
