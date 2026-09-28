@@ -1,91 +1,86 @@
-import { supabaseClient } from './supabaseClient.js';
+import { supabase } from './supabaseClient.js';
 
-let signalChannel = null;
-let chatChannel = null;
+let channel = null;
 
-export function initSignalingChannels(room, currentUser, callbacks) {
-    chatChannel = supabaseClient.channel('chat_' + room);
-    chatChannel.on('broadcast', { event: 'msg' }, payload => {
-        if (callbacks.onChatMessage) {
-            callbacks.onChatMessage(payload.payload.sender, payload.payload.text);
-        }
-    }).subscribe();
+export function initSignalingChannels(roomCode, currentUser, callbacks) {
+    if (channel) {
+        supabase.removeChannel(channel);
+    }
 
-    signalChannel = supabaseClient.channel('signal_' + room, {
+    channel = supabase.channel(`room-${roomCode}`, {
         config: { broadcast: { self: false } }
     });
 
-    signalChannel
-        .on('broadcast', { event: 'webrtc-signal' }, async payload => {
-            if (callbacks.onSignalData) {
-                await callbacks.onSignalData(payload.payload);
+    channel
+        .on('broadcast', { event: 'webrtc-signal' }, payload => {
+            const data = payload.payload;
+            // Só processa se o sinal for destinado a mim ou for broadcast geral
+            if (!data.target || data.target === currentUser) {
+                if (callbacks.onSignalData) callbacks.onSignalData(data);
             }
         })
-        .on('broadcast', { event: 'user-joined' }, async payload => {
-            const remoteName = payload.payload.sender;
-            if (callbacks.onUserJoined) {
-                await callbacks.onUserJoined(remoteName);
+        .on('broadcast', { event: 'chat-message' }, payload => {
+            const data = payload.payload;
+            if (callbacks.onChatMessage) callbacks.onChatMessage(data.sender, data.text);
+        })
+        .on('broadcast', { event: 'user-joined' }, payload => {
+            const data = payload.payload;
+            if (data.sender !== currentUser && callbacks.onUserJoined) {
+                callbacks.onUserJoined(data.sender);
             }
         })
         .on('broadcast', { event: 'user-presence' }, payload => {
-            if (callbacks.onUserPresence) {
-                callbacks.onUserPresence(payload.payload.sender);
+            const data = payload.payload;
+            if (data.sender !== currentUser && callbacks.onUserPresence) {
+                callbacks.onUserPresence(data.sender);
             }
         })
         .subscribe(status => {
-            if (status === 'SUBSCRIBED' && callbacks.onSubscribed) {
-                callbacks.onSubscribed();
+            if (status === 'SUBSCRIBED') {
+                if (callbacks.onSubscribed) callbacks.onSubscribed();
             }
         });
-
-    return { signalChannel, chatChannel };
 }
 
-export function sendSignal(data) {
-    if (signalChannel) {
-        signalChannel.send({
-            type: 'broadcast',
-            event: 'webrtc-signal',
-            payload: data
-        });
-    }
+export function sendSignal(signalData) {
+    if (!channel) return;
+    channel.send({
+        type: 'broadcast',
+        event: 'webrtc-signal',
+        payload: signalData
+    });
 }
 
-export function sendUserJoinedSignal(sender) {
-    if (signalChannel) {
-        signalChannel.send({
-            type: 'broadcast',
-            event: 'user-joined',
-            payload: { sender }
-        });
-    }
+export function sendUserJoinedSignal(currentUser) {
+    if (!channel) return;
+    channel.send({
+        type: 'broadcast',
+        event: 'user-joined',
+        payload: { sender: currentUser }
+    });
 }
 
-export function sendUserPresenceSignal(sender) {
-    if (signalChannel) {
-        signalChannel.send({
-            type: 'broadcast',
-            event: 'user-presence',
-            payload: { sender }
-        });
-    }
+export function sendUserPresenceSignal(currentUser) {
+    if (!channel) return;
+    channel.send({
+        type: 'broadcast',
+        event: 'user-presence',
+        payload: { sender: currentUser }
+    });
 }
 
-export function sendChatMessageSignal(sender, text) {
-    if (chatChannel) {
-        chatChannel.send({
-            type: 'broadcast',
-            event: 'msg',
-            payload: { sender, text }
-        });
-    }
+export function sendChatMessageSignal(currentUser, text) {
+    if (!channel) return;
+    channel.send({
+        type: 'broadcast',
+        event: 'chat-message',
+        payload: { sender: currentUser, text: text }
+    });
 }
 
 export function cleanupSignalingChannels() {
-    if (supabaseClient) {
-        if (chatChannel) supabaseClient.removeChannel(chatChannel);
-        if (signalChannel) supabaseClient.removeChannel(signalChannel);
+    if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
     }
-    chatChannel = null;
-    signalChannel = null;
 }
