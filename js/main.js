@@ -149,11 +149,20 @@ async function enterCallScreen(room) {
     resetOnlineMembers(currentUser);
     updateOnlineMembersList(currentUser, true);
 
+    // 1. PRIMEIRO: Inicializa a câmera/microfone e aguarda o stream estar pronto
     const stream = await initLocalCamera();
     const localVideo = document.getElementById('local-video');
-    if (stream && stream.getVideoTracks().length > 0) {
+    
+    if (stream && (stream.getVideoTracks().length > 0 || stream.getAudioTracks().length > 0)) {
         localVideo.srcObject = stream;
-        document.getElementById('local-placeholder').style.display = 'none';
+        localVideo.muted = true; // Silencia o próprio microfone para evitar eco local
+        localVideo.play().catch(() => {});
+        
+        if (stream.getVideoTracks().length > 0) {
+            document.getElementById('local-placeholder').style.display = 'none';
+        } else {
+            document.getElementById('local-placeholder').style.display = 'flex';
+        }
     } else {
         document.getElementById('local-placeholder').style.display = 'flex';
     }
@@ -163,6 +172,7 @@ async function enterCallScreen(room) {
     if (localAudioMonitor) localAudioMonitor.stop();
     localAudioMonitor = monitorAudioLevel(stream, localBox, true);
 
+    // 2. SEGUNDO: Só inicializa a sinalização WebRTC após o stream local estar garantido
     initSignalingChannels(room, currentUser, {
         onChatMessage: (sender, text) => {
             appendChatMessage(document.getElementById('chat-messages'), sender, text, false);
@@ -172,6 +182,7 @@ async function enterCallScreen(room) {
                 document.getElementById('remote-status').style.display = 'none';
                 const remoteVideo = document.getElementById('remote-video');
                 remoteVideo.srcObject = remoteStream;
+                remoteVideo.muted = false; // Garante reprodução de áudio remoto
                 remoteVideo.play().catch(() => {});
 
                 // Monitora áudio remoto
@@ -194,6 +205,7 @@ async function enterCallScreen(room) {
                 document.getElementById('remote-status').style.display = 'none';
                 const remoteVideo = document.getElementById('remote-video');
                 remoteVideo.srcObject = remoteStream;
+                remoteVideo.muted = false;
                 remoteVideo.play().catch(() => {});
 
                 const remoteBox = remoteVideo.closest('.video-box');
