@@ -136,7 +136,8 @@
                 <div class="text-xs text-gray-400">Logado como: <strong id="display-username" class="text-white"></strong></div>
             </div>
 
-            <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 items-center justify-center overflow-y-auto mb-4">
+            <!-- GRID DINÂMICO DE VÍDEOS -->
+            <div id="videos-grid" class="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-center justify-center overflow-y-auto mb-4">
                 <!-- Local Video -->
                 <div class="video-box relative bg-[#111827] rounded-3xl overflow-hidden border border-gray-800 aspect-video flex items-center justify-center shadow-2xl">
                     <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
@@ -153,31 +154,10 @@
                         <i class="fa-solid fa-expand"></i>
                     </button>
                 </div>
-
-                <!-- Remote Video -->
-                <div class="video-box relative bg-[#111827] rounded-3xl overflow-hidden border border-gray-800 aspect-video flex items-center justify-center shadow-2xl">
-                    <video id="remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
-                    
-                    <div id="remote-status" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 text-sm bg-[#0b0f19]/90 z-20">
-                        <div class="w-16 h-16 rounded-2xl bg-[#111827] border border-gray-800 flex items-center justify-center text-indigo-400 mb-3 text-xl animate-pulse">
-                            <i class="fa-solid fa-user-clock"></i>
-                        </div>
-                        <span id="remote-status-text" class="text-xs font-medium text-gray-400">Aguardando participante entrar...</span>
-                    </div>
-
-                    <div class="absolute bottom-3 left-3 bg-[#0b0f19]/80 backdrop-blur-md border border-gray-800 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-gray-200 flex items-center gap-2 z-10">
-                        <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
-                        <span id="remote-label">Participante Remoto</span>
-                    </div>
-                    <button class="fullscreen-btn absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-xl text-xs backdrop-blur-md transition cursor-pointer border border-gray-700/50 z-10">
-                        <i class="fa-solid fa-expand"></i>
-                    </button>
-                </div>
             </div>
 
             <!-- Controles de Mídia -->
             <div class="flex justify-center items-center gap-3 bg-[#111827]/80 backdrop-blur-md border border-gray-800 p-3 rounded-2xl shadow-2xl">
-                <!-- Seletor de Microfone -->
                 <div class="relative">
                     <select id="mic-select" title="Selecionar Microfone" class="bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs px-3 py-3 rounded-xl border border-gray-700 focus:outline-none transition cursor-pointer max-w-[140px] truncate">
                         <option value="">Microfone Padrão</option>
