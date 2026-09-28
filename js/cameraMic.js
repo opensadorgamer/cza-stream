@@ -3,33 +3,22 @@ let currentAudioDeviceId = null;
 
 export async function initLocalCamera(audioDeviceId = null) {
     try {
-        // Atualiza o ID global do microfone imediatamente para manter a sincronia
         currentAudioDeviceId = audioDeviceId;
         
-        let audioConstraints = {};
-        
-        if (audioDeviceId && audioDeviceId !== "") {
-            audioConstraints = {
-                deviceId: { exact: audioDeviceId },
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            };
-            console.log("A abrir microfone externo/USB com ID exato:", audioDeviceId);
-        } else {
-            audioConstraints = {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            };
-            console.log("A abrir microfone padrão do sistema...");
-        }
+        // Configuração exata para aceitar microfones USB e Wireless no desktop
+        const audioConstraints = audioDeviceId ? {
+            deviceId: { exact: audioDeviceId },
+            echoCancellation: true,
+            noiseSuppression: true
+        } : {
+            echoCancellation: true,
+            noiseSuppression: true
+        };
 
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-        // Se já existir um stream local anterior ativo, param-se as faixas antigas para evitar conflito de driver USB
         if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
+            localStream.getTracks().forEach(t => t.stop());
         }
 
         if (!isMobile) {
@@ -40,14 +29,13 @@ export async function initLocalCamera(audioDeviceId = null) {
             return localStream;
         }
 
-        // Telemóvel
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
             if (localStream.getAudioTracks().length > 0) {
                 localStream.getAudioTracks()[0].enabled = true;
             }
             return localStream;
-        } catch (videoErr) {
+        } catch (e) {
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
             if (localStream.getAudioTracks().length > 0) {
                 localStream.getAudioTracks()[0].enabled = true;
@@ -56,12 +44,9 @@ export async function initLocalCamera(audioDeviceId = null) {
         }
 
     } catch (err) {
-        console.error("Erro ao aceder ao microfone selecionado, a tentar fallback universal:", err);
+        console.error("Erro ao abrir microfone, a tentar padrão:", err);
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-            if (localStream.getAudioTracks().length > 0) {
-                localStream.getAudioTracks()[0].enabled = true;
-            }
             return localStream;
         } catch (e) {
             localStream = new MediaStream();
@@ -75,9 +60,7 @@ export async function populateAudioDevices(selectElementId) {
     if (!select) return;
 
     try {
-        // Garante permissão ativa para listar os nomes reais dos dispositivos USB/Wireless
         await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
-        
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(device => device.kind === 'audioinput');
 
@@ -93,7 +76,7 @@ export async function populateAudioDevices(selectElementId) {
             select.value = currentAudioDeviceId;
         }
     } catch (e) {
-        console.error("Erro ao listar microfones:", e);
+        console.error("Erro ao listar dispositivos de áudio:", e);
     }
 }
 
