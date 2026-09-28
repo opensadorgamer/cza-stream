@@ -1,6 +1,32 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
-// Exporta as duas opções para garantir que qualquer import funcione
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-export const supabaseClient = supabase;
+
+// Função para buscar ou criar o perfil do usuário no Supabase
+export async function fetchUserProfile(userId) {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+    if (error) {
+        console.warn("Perfil não encontrado ou erro ao buscar:", error.message);
+        return null;
+    }
+    return data;
+}
+
+export async function updateUserProfile(userId, updates) {
+    const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId);
+
+    if (error) {
+        console.error("Erro ao atualizar perfil:", error.message);
+        return false;
+    }
+    return true;
+}
