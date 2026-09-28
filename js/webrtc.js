@@ -29,12 +29,17 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Adiciona explicitamente o stream local (seja áudio do PC ou áudio+vídeo do telemóvel)
+    // Adiciona o stream local ativo (tela ou microfone)
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
-    if (activeStream) {
+    
+    if (activeStream && activeStream.getTracks().length > 0) {
         activeStream.getTracks().forEach(track => {
             pc.addTrack(track, activeStream);
         });
+    } else {
+        // CORREÇÃO CRUCIAL: Assegura que o WebRTC cria um transreceptor de áudio bidirecional 
+        // mesmo se o stream local demorar a responder, permitindo replaceTrack posterior.
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
     }
 
     pc.onicecandidate = event => {
