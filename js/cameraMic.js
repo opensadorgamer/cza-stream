@@ -15,24 +15,41 @@ export async function initLocalCamera(audioDeviceId = null) {
             autoGainControl: true
         };
 
-        console.log("A solicitar acesso ao microfone com constraints limpas...");
-        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
-        
-        if (localStream.getAudioTracks().length > 0) {
-            localStream.getAudioTracks()[0].enabled = true;
+        // Verifica se o navegador suporta enumeração de dispositivos para detetar câmara
+        let hasVideoInput = false;
+        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            hasVideoInput = devices.some(device => device.kind === 'videoinput');
         }
 
-        return localStream;
+        // Se NÃO tiver câmara (como o seu PC), abre estritamente apenas áudio
+        if (!hasVideoInput) {
+            console.log("PC sem câmara detetado. A solicitar apenas áudio...");
+            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
+            return localStream;
+        }
+
+        // Se TIVER câmara (como o telemóvel), tenta abrir vídeo e áudio normalmente
+        console.log("Dispositivo com câmara detetado. A solicitar vídeo e áudio...");
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } }, 
+                audio: audioConstraints 
+            });
+            return localStream;
+        } catch (videoErr) {
+            console.warn("Falha ao abrir câmara, a tentar fallback apenas para áudio...", videoErr);
+            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
+            return localStream;
+        }
+
     } catch (err) {
-        console.warn("Falha ao abrir microfone específico, a tentar padrão...", err);
+        console.warn("Erro ao aceder aos dispositivos de mídia, a tentar padrão...", err);
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-            if (localStream.getAudioTracks().length > 0) {
-                localStream.getAudioTracks()[0].enabled = true;
-            }
             return localStream;
         } catch (audioErr) {
-            console.error("Erro crítico: Microfone indisponível ou negado:", audioErr);
+            console.error("Erro crítico: Mídia indisponível ou negada:", audioErr);
             localStream = new MediaStream();
             return localStream;
         }
@@ -77,6 +94,11 @@ export function toggleAudioTrack() {
 }
 
 export function toggleVideoTrack() {
+    const track = localStream ? localStream.getVideoTracks()[0] : null;
+    if (track) {
+        track.enabled = !track.enabled;
+        return track.enabled;
+    }
     return false;
 }
 
