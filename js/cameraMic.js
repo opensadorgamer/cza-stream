@@ -6,33 +6,35 @@ export async function initLocalCamera(audioDeviceId = null) {
         currentAudioDeviceId = audioDeviceId;
         const audioConstraints = audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true;
 
+        // Verifica se o dispositivo possui alguma câmara ligada
+        let hasVideoInput = false;
         if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
             const devices = await navigator.mediaDevices.enumerateDevices();
-            const hasVideoInput = devices.some(device => device.kind === 'videoinput');
-
-            if (!hasVideoInput) {
-                console.warn("Nenhum dispositivo de vídeo detetado. A solicitar apenas áudio...");
-                localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
-                return localStream;
-            }
+            hasVideoInput = devices.some(device => device.kind === 'videoinput');
         }
 
+        if (!hasVideoInput) {
+            console.log("PC sem webcam detetado. A solicitar estritamente apenas áudio...");
+            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
+            return localStream;
+        }
+
+        // Se tiver câmara, tenta abrir vídeo e áudio juntos
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
         return localStream;
     } catch (err) {
-        console.warn("Falha ao abrir câmara/mic com restrições, a tentar fallback...", err);
+        console.warn("Falha ao abrir câmara, a utilizar fallback limpo para apenas áudio...", err);
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
             return localStream;
         } catch (audioErr) {
-            console.warn("Erro crítico: Microfone indisponível ou negado:", audioErr);
+            console.error("Erro crítico: Microfone indisponível ou negado:", audioErr);
             localStream = new MediaStream();
             return localStream;
         }
     }
 }
 
-// Função para listar os microfones disponíveis no <select>
 export async function populateAudioDevices(selectElementId) {
     const select = document.getElementById(selectElementId);
     if (!select) return;
@@ -41,7 +43,7 @@ export async function populateAudioDevices(selectElementId) {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(device => device.kind === 'audioinput');
 
-        select.innerHTML = '<option value="">Microfone Padrão do Sistema</option>';
+        select.innerHTML = '<option value="">Microfone Padrão</option>';
         audioInputs.forEach((device, index) => {
             const option = document.createElement('option');
             option.value = device.deviceId;
