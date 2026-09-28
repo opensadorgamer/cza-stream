@@ -27,6 +27,7 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
+    // Adiciona as faixas locais ativas (Áudio e Vídeo/Tela)
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     if (activeStream) {
         activeStream.getTracks().forEach(track => {
@@ -108,12 +109,19 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
     }
 }
 
+// CORREÇÃO: Substitui o vídeo existente ou adiciona a faixa se não houver câmara ativa
 export async function replaceVideoTrackOnAll(newTrack) {
+    const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
+    
     Object.keys(peers).forEach(remoteUser => {
         const pc = peers[remoteUser];
-        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender) {
-            sender.replaceTrack(newTrack);
+        const senders = pc.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+
+        if (videoSender) {
+            videoSender.replaceTrack(newTrack);
+        } else if (newTrack && activeStream) {
+            pc.addTrack(newTrack, activeStream);
         }
     });
 }
