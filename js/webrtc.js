@@ -29,12 +29,9 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // CORREÇÃO CRUCIAL: Adiciona transceptores preventivos de áudio e vídeo para fixar 
-    // a ordem das linhas de media (m-lines) desde o início, evitando o erro de SSL role e m-lines.
     pc.addTransceiver('audio', { direction: 'sendrecv' });
     pc.addTransceiver('video', { direction: 'sendrecv' });
 
-    // Associa as faixas locais ativas (se houver) aos remetentes existentes
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     if (activeStream && activeStream.getTracks().length > 0) {
         const senders = pc.getSenders();
@@ -123,21 +120,28 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
     }
 }
 
-export async function replaceVideoTrackOnAll(newTrack) {
-    const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
-    
+export async function replaceVideoTrackOnAll(newVideoTrack) {
+    const localStream = getLocalStream();
+    const localAudioTrack = localStream ? localStream.getAudioTracks()[0] : null;
+
     for (const remoteUser of Object.keys(peers)) {
         const pc = peers[remoteUser];
         const senders = pc.getSenders();
         
-        activeStream.getTracks().forEach(track => {
-            const sender = senders.find(s => s.track && s.track.kind === track.kind);
-            if (sender) {
-                sender.replaceTrack(track);
-            } else {
-                pc.addTrack(track, activeStream);
+        const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+        if (audioSender && localAudioTrack) {
+            audioSender.replaceTrack(localAudioTrack);
+        }
+
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (videoSender) {
+            await videoSender.replaceTrack(newVideoTrack);
+        } else {
+            const screenStream = getScreenStream();
+            if (screenStream) {
+                pc.addTrack(newVideoTrack, screenStream);
             }
-        });
+        }
 
         try {
             if (pc.signalingState === "stable") {
