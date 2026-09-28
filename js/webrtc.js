@@ -29,16 +29,12 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Adiciona as faixas do stream ativo de forma segura
+    // Adiciona estritamente o stream ativo (seja a tela compartilhada ou o stream local de áudio/vídeo)
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     if (activeStream && activeStream.getTracks().length > 0) {
         activeStream.getTracks().forEach(track => {
             pc.addTrack(track, activeStream);
         });
-    } else {
-        // Garante transceptores padrão caso o stream ainda esteja a carregar
-        pc.addTransceiver('audio', { direction: 'sendrecv' });
-        pc.addTransceiver('video', { direction: 'sendrecv' });
     }
 
     pc.onicecandidate = event => {
@@ -103,7 +99,7 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
         } else if (data.type === 'candidate') {
             if (data.candidate) {
-                if (pc.remoteDescription && pc.remoteDescription.type) {
+                if (pc.remoteDescription) {
                     await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
                 } else {
                     if (!iceCandidateQueues[remoteUser]) iceCandidateQueues[remoteUser] = [];
@@ -149,7 +145,7 @@ export async function replaceVideoTrackOnAll(newTrack) {
     }
 }
 
-export function closeAllPeers() {
+export function closeAllPeer() {
     Object.keys(peers).forEach(remoteUser => {
         if (peers[remoteUser]) {
             peers[remoteUser].close();
@@ -158,4 +154,8 @@ export function closeAllPeers() {
     });
     peers = {};
     iceCandidateQueues = {};
+}
+
+export function closeAllPeers() {
+    closeAllPeer();
 }
