@@ -1,15 +1,85 @@
-body { font-family: 'Inter', sans-serif; background-color: #0b0f19; overflow-x: hidden; }
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0b0f19; }
-::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #374151; }
+@import "tailwindcss";
 
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #0b0f19;
+    color: #f3f4f6;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0b0f19;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1f2937;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #374151;
+}
+
+/* Caixa de vídeo padrão com tamanho expandido e proporção otimizada */
 .video-box {
     overflow: hidden;
     background: #111827;
+    border-radius: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+    min-height: 380px; /* Aumenta consideravelmente a altura padrão antes da tela cheia */
+    width: 100%;
+    transition: all 0.3s ease;
 }
 
-.video-box.fullscreen {
+/* Efeito de vidro moderno (Glassmorphism) para elementos flutuantes */
+.glass-panel {
+    background: rgba(17, 24, 39, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Customização dos sliders de volume modernos */
+input[type="range"] {
+    appearance: none;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 9999px;
+    height: 5px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #6366f1;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+/* Nitidez máxima de imagem no WebRTC */
+video {
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: high-quality;
+}
+
+/* Modo Tela Cheia (Fullscreen) otimizado sem perda de qualidade */
+.video-box.fullscreen,
+.video-box:fullscreen,
+.video-box:-webkit-full-screen {
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
@@ -20,12 +90,16 @@ body { font-family: 'Inter', sans-serif; background-color: #0b0f19; overflow-x: 
     border-radius: 0 !important;
     border: none !important;
     padding: 0 !important;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: none !important;
+    min-height: 100vh !important;
 }
 
-.video-box.fullscreen video {
+.video-box.fullscreen video,
+.video-box:fullscreen video,
+.video-box:-webkit-full-screen video {
     width: 100% !important;
     height: 100% !important;
     object-fit: contain !important;
