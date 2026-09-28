@@ -90,13 +90,17 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
 
             const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            sendSignal({
-                type: 'answer',
-                sdp: answer,
-                sender: currentUser,
-                target: remoteUser
-            });
+            
+            // Validação de estado estrita para evitar falhas de setLocalDescription
+            if (pc.signalingState === "have-remote-offer" || pc.signalingState === "have-local-pranswer") {
+                await pc.setLocalDescription(answer);
+                sendSignal({
+                    type: 'answer',
+                    sdp: answer,
+                    sender: currentUser,
+                    target: remoteUser
+                });
+            }
 
         } else if (data.type === 'answer') {
             if (pc.signalingState === "have-local-offer") {
@@ -109,7 +113,7 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
         } else if (data.type === 'candidate') {
             if (data.candidate) {
-                if (pc.remoteDescription) {
+                if (pc.remoteDescription && pc.remoteDescription.type) {
                     await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
                 } else {
                     if (!iceCandidateQueues[remoteUser]) iceCandidateQueues[remoteUser] = [];
@@ -118,7 +122,7 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
         }
     } catch (e) {
-        console.error(`Erro de sinalização com ${remoteUser}:`, e);
+        console.warn(`Aviso de sinalização tratado para ${remoteUser}:`, e);
     }
 }
 
