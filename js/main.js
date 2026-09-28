@@ -7,19 +7,22 @@ import { createPeerConnectionForUser, handleSignalingData, replaceVideoTrackOnAl
 import { appendChatMessage, appendSystemMessage } from './chat.js';
 import { showScreen, showAuthError, showLobbyError, toggleFullscreen, updateOnlineMembersList, resetOnlineMembers } from './interface.js';
 import { monitorAudioLevel } from './audioIndicator.js';
+import { fetchUserProfile } from './supabaseClient.js';
 
 let localAudioMonitor = null;
 const remoteAudioMonitors = {};
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     if (checkSavedSession()) {
         showScreen('lobby-screen');
+        const username = getCurrentUser();
         const loggedEl = document.getElementById('logged-user-name');
-        if (loggedEl) loggedEl.innerText = getCurrentUser();
+        if (loggedEl) loggedEl.innerText = username;
     } else {
         showScreen('auth-screen');
     }
 
+    // Configuração dos botões de autenticação, sala e controlos
     const loginBtn = document.getElementById('login-btn');
     if (loginBtn) {
         loginBtn.addEventListener('click', async () => {
@@ -82,22 +85,17 @@ window.addEventListener('DOMContentLoaded', () => {
     if (micSelect) {
         micSelect.addEventListener('change', async (e) => {
             const deviceId = e.target.value;
-            console.log("A trocar para o microfone externo/USB:", deviceId);
-            
             const stream = await initLocalCamera(deviceId);
-            
             if (stream && stream.getAudioTracks().length > 0) {
                 const newAudioTrack = stream.getAudioTracks()[0];
                 newAudioTrack.enabled = true;
 
                 import('./webrtc.js').then(async (webrtcMod) => {
                     const peers = webrtcMod.getPeers();
-
                     for (const remoteUser of Object.keys(peers)) {
                         const pc = peers[remoteUser];
                         const senders = pc.getSenders();
                         const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-                        
                         if (audioSender) {
                             await audioSender.replaceTrack(newAudioTrack);
                         } else {
@@ -105,7 +103,6 @@ window.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 });
-
                 appendSystemMessage(document.getElementById('chat-messages'), 'Microfone alterado e sincronizado com sucesso.');
             }
         });
@@ -136,13 +133,9 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const leaveCallHandler = () => {
-        leaveCall();
-    };
-
+    const leaveCallHandler = () => { leaveCall(); };
     const leaveCallBtn = document.getElementById('leave-call-btn');
     if (leaveCallBtn) leaveCallBtn.addEventListener('click', leaveCallHandler);
-
     const leaveCallSidebarBtn = document.getElementById('leave-call-sidebar-btn');
     if (leaveCallSidebarBtn) leaveCallSidebarBtn.addEventListener('click', leaveCallHandler);
 
@@ -195,15 +188,10 @@ async function enterCallScreen(room) {
     const localVideo = document.getElementById('local-video');
     if (stream && (stream.getVideoTracks().length > 0 || stream.getAudioTracks().length > 0)) {
         localVideo.srcObject = stream;
-        localVideo.muted = true; // Impede o eco local
-        localVideo.volume = 0;   // Volume zero absoluto para a tag local
+        localVideo.muted = true;
+        localVideo.volume = 0;
         localVideo.play().catch(() => {});
-        
-        if (stream.getVideoTracks().length > 0) {
-            document.getElementById('local-placeholder').style.display = 'none';
-        } else {
-            document.getElementById('local-placeholder').style.display = 'flex';
-        }
+        document.getElementById('local-placeholder').style.display = stream.getVideoTracks().length > 0 ? 'none' : 'flex';
     } else {
         document.getElementById('local-placeholder').style.display = 'flex';
     }
@@ -252,6 +240,7 @@ async function enterCallScreen(room) {
     });
 }
 
+// Renderização dos utilizadores remotos com controles de volume independentes para Voz e Tela
 function renderRemoteVideo(remoteUser, remoteStream) {
     let videoBox = document.getElementById(`remote-box-${remoteUser}`);
     
@@ -259,19 +248,32 @@ function renderRemoteVideo(remoteUser, remoteStream) {
         const grid = document.getElementById('videos-grid');
         videoBox = document.createElement('div');
         videoBox.id = `remote-box-${remoteUser}`;
-        videoBox.className = "video-box relative bg-[#111827] rounded-3xl overflow-hidden border border-gray-800 aspect-video flex items-center justify-center shadow-2xl";
+        videoBox.className = "video-box relative bg-gray-900/80 backdrop-blur-xl rounded-2xl overflow-hidden border border-gray-800/80 aspect-video flex items-center justify-center shadow-2xl transition-all duration-300";
         videoBox.innerHTML = `
             <video id="remote-video-${remoteUser}" autoplay playsinline class="w-full h-full object-cover"></video>
-            <div class="absolute bottom-3 left-3 bg-[#0b0f19]/80 backdrop-blur-md border border-gray-800 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-gray-200 flex items-center gap-2 z-10">
-                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+            <audio id="remote-screen-audio-${remoteUser}" autoplay playsinline></audio>
+
+            <div class="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md border border-gray-700/50 px-3 py-1.5 rounded-xl text-xs font-medium text-gray-200 flex items-center gap-2 z-10">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>${remoteUser}</span>
             </div>
+
             <button class="fullscreen-btn absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-xl text-xs backdrop-blur-md transition cursor-pointer border border-gray-700/50 z-10">
                 <i class="fa-solid fa-expand"></i>
             </button>
-            <div class="volume-slider-container absolute top-3 left-3 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-gray-700/50 px-2.5 py-1.5 rounded-xl text-xs text-white flex items-center gap-2 z-10 transition">
-                <i class="fa-solid fa-volume-high text-[10px]"></i>
-                <input type="range" min="0" max="1" step="0.05" value="1" class="w-16 cursor-pointer accent-indigo-500">
+
+            <!-- Painel de volumes separados por voz e tela -->
+            <div class="absolute top-3 left-3 flex flex-col gap-1.5 bg-black/70 hover:bg-black/90 backdrop-blur-md border border-gray-700/50 p-2 rounded-xl text-[11px] text-white z-10 transition shadow-lg">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-microphone text-indigo-400 w-3"></i>
+                    <span class="text-gray-300 w-8">Voz:</span>
+                    <input type="range" id="vol-mic-${remoteUser}" min="0" max="1" step="0.05" value="1" class="w-20 cursor-pointer accent-indigo-500">
+                </div>
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-desktop text-emerald-400 w-3"></i>
+                    <span class="text-gray-300 w-8">Tela:</span>
+                    <input type="range" id="vol-screen-${remoteUser}" min="0" max="1" step="0.05" value="1" class="w-20 cursor-pointer accent-emerald-500">
+                </div>
             </div>
         `;
         grid.appendChild(videoBox);
@@ -280,18 +282,43 @@ function renderRemoteVideo(remoteUser, remoteStream) {
             toggleFullscreen(videoBox);
         });
 
-        const slider = videoBox.querySelector('input');
-        const remoteVideo = videoBox.querySelector('video');
-        slider.addEventListener('input', (e) => {
-            remoteVideo.volume = e.target.value;
+        const micSlider = document.getElementById(`vol-mic-${remoteUser}`);
+        const screenSlider = document.getElementById(`vol-screen-${remoteUser}`);
+        const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
+        const remoteScreenAudio = document.getElementById(`remote-screen-audio-${remoteUser}`);
+
+        micSlider.addEventListener('input', (e) => {
+            if (remoteVideo) remoteVideo.volume = e.target.value;
+        });
+
+        screenSlider.addEventListener('input', (e) => {
+            if (remoteScreenAudio) remoteScreenAudio.volume = e.target.value;
         });
     }
 
     const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
-    if (remoteVideo) {
-        remoteVideo.srcObject = remoteStream;
-        remoteVideo.muted = false;
-        remoteVideo.play().catch(() => {});
+    const remoteScreenAudio = document.getElementById(`remote-screen-audio-${remoteUser}`);
+
+    if (remoteVideo && remoteScreenAudio) {
+        const audioTracks = remoteStream.getAudioTracks();
+        const videoTracks = remoteStream.getVideoTracks();
+
+        if (videoTracks.length > 0) {
+            remoteVideo.srcObject = remoteStream;
+            remoteVideo.muted = false;
+            remoteVideo.play().catch(() => {});
+        }
+
+        if (audioTracks.length > 1) {
+            const screenAudioStream = new MediaStream([audioTracks[1]]);
+            remoteScreenAudio.srcObject = screenAudioStream;
+            remoteScreenAudio.muted = false;
+            remoteScreenAudio.play().catch(() => {});
+        } else if (audioTracks.length === 1) {
+            remoteVideo.srcObject = remoteStream;
+            remoteVideo.muted = false;
+            remoteVideo.play().catch(() => {});
+        }
         
         if (remoteAudioMonitors[remoteUser]) remoteAudioMonitors[remoteUser].stop();
         remoteAudioMonitors[remoteUser] = monitorAudioLevel(remoteStream, videoBox, false);
