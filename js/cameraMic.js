@@ -6,17 +6,28 @@ export async function initLocalCamera(audioDeviceId = null) {
         currentAudioDeviceId = audioDeviceId;
         const audioConstraints = audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true;
 
-        // Tenta abrir APENAS áudio se soubermos que é um ambiente sem câmara ou por segurança,
-        // mas vamos tentar com vídeo apenas se o utilizador quiser explicitamente ou se houver hardware válido.
-        // Como o seu PC não tem webcam, vamos forçar explicitamente video: false para evitar qualquer NotReadableError.
-        
-        console.log("A inicializar áudio com restrições:", audioConstraints);
-        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
+        // 1. Verifica se o aparelho tem hardware de vídeo (câmara) disponível
+        let hasVideoInput = false;
+        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            hasVideoInput = devices.some(device => device.kind === 'videoinput');
+        }
+
+        if (!hasVideoInput) {
+            console.log("Nenhuma câmara detetada neste dispositivo. A solicitar apenas áudio...");
+            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
+            return localStream;
+        }
+
+        // 2. Se tiver câmara (ex: telemóvel), tenta abrir com vídeo e áudio
+        console.log("Câmara detetada. A solicitar vídeo e áudio...");
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
         return localStream;
 
     } catch (err) {
-        console.warn("Falha ao abrir áudio com dispositivo específico, a tentar microfone padrão...", err);
+        console.warn("Falha ao abrir câmara ou microfone com restrições, a tentar fallback universal...", err);
         try {
+            // Fallback total de segurança: tenta abrir apenas áudio se falhar o vídeo
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
             return localStream;
         } catch (audioErr) {
