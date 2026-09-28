@@ -3,11 +3,10 @@ let currentAudioDeviceId = null;
 
 export async function initLocalCamera(audioDeviceId = null) {
     try {
+        // Atualiza o ID global do microfone imediatamente para manter a sincronia
         currentAudioDeviceId = audioDeviceId;
         
-        // CORREÇÃO CRUCIAL: No desktop, para microfones USB/Wireless, o ID precisa 
-        // de ser passado explicitamente no formato { exact: id } se houver um ID selecionado.
-        let audioConstraints = true;
+        let audioConstraints = {};
         
         if (audioDeviceId && audioDeviceId !== "") {
             audioConstraints = {
@@ -16,17 +15,22 @@ export async function initLocalCamera(audioDeviceId = null) {
                 noiseSuppression: true,
                 autoGainControl: true
             };
-            console.log("A abrir microfone externo/específico com ID:", audioDeviceId);
+            console.log("A abrir microfone externo/USB com ID exato:", audioDeviceId);
         } else {
             audioConstraints = {
                 echoCancellation: true,
                 noiseSuppression: true,
                 autoGainControl: true
             };
-            console.log("A abrir microfone padrão do desktop...");
+            console.log("A abrir microfone padrão do sistema...");
         }
 
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        // Se já existir um stream local anterior ativo, param-se as faixas antigas para evitar conflito de driver USB
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+        }
 
         if (!isMobile) {
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
@@ -52,7 +56,7 @@ export async function initLocalCamera(audioDeviceId = null) {
         }
 
     } catch (err) {
-        console.error("Erro ao aceder ao microfone selecionado, a tentar padrão simples:", err);
+        console.error("Erro ao aceder ao microfone selecionado, a tentar fallback universal:", err);
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
             if (localStream.getAudioTracks().length > 0) {
@@ -71,7 +75,7 @@ export async function populateAudioDevices(selectElementId) {
     if (!select) return;
 
     try {
-        // Garante permissão ativa para listar os rótulos reais dos dispositivos USB/Wireless
+        // Garante permissão ativa para listar os nomes reais dos dispositivos USB/Wireless
         await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
         
         const devices = await navigator.mediaDevices.enumerateDevices();
