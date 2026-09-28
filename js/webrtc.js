@@ -79,9 +79,13 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
 
     try {
         if (data.type === 'offer') {
-            if (pc.signalingState !== "stable") {
+            // Evita colisão de estados se já houver uma negociação em curso
+            const collision = data.type === 'offer' && (pc.signalingState !== "stable");
+            
+            if (collision) {
                 await pc.setLocalDescription({ type: "rollback" }).catch(() => {});
             }
+
             await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
 
             while (iceCandidateQueues[remoteUser] && iceCandidateQueues[remoteUser].length > 0) {
@@ -90,17 +94,13 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
 
             const answer = await pc.createAnswer();
-            
-            // Validação de estado estrita para evitar falhas de setLocalDescription
-            if (pc.signalingState === "have-remote-offer" || pc.signalingState === "have-local-pranswer") {
-                await pc.setLocalDescription(answer);
-                sendSignal({
-                    type: 'answer',
-                    sdp: answer,
-                    sender: currentUser,
-                    target: remoteUser
-                });
-            }
+            await pc.setLocalDescription(answer);
+            sendSignal({
+                type: 'answer',
+                sdp: answer,
+                sender: currentUser,
+                target: remoteUser
+            });
 
         } else if (data.type === 'answer') {
             if (pc.signalingState === "have-local-offer") {
@@ -122,7 +122,7 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
         }
     } catch (e) {
-        console.warn(`Aviso de sinalização tratado para ${remoteUser}:`, e);
+        console.warn(`Sinalização gerida para ${remoteUser}:`, e);
     }
 }
 
