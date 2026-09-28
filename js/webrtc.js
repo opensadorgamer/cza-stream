@@ -29,7 +29,7 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Adiciona o stream local ativo (tela ou microfone)
+    // Obtém o stream ativo (tela compartilhada ou microfone/câmara local)
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     
     if (activeStream && activeStream.getTracks().length > 0) {
@@ -37,9 +37,14 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
             pc.addTrack(track, activeStream);
         });
     } else {
-        // CORREÇÃO CRUCIAL: Assegura que o WebRTC cria um transreceptor de áudio bidirecional 
-        // mesmo se o stream local demorar a responder, permitindo replaceTrack posterior.
-        pc.addTransceiver('audio', { direction: 'sendrecv' });
+        const fallbackStream = getLocalStream();
+        if (fallbackStream && fallbackStream.getAudioTracks().length > 0) {
+            fallbackStream.getAudioTracks().forEach(track => {
+                pc.addTrack(track, fallbackStream);
+            });
+        } else {
+            pc.addTransceiver('audio', { direction: 'sendrecv' });
+        }
     }
 
     pc.onicecandidate = event => {
