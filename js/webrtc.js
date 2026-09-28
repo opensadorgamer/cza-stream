@@ -166,4 +166,3 @@ export function closeAllPeers() {
     peers = {};
     iceCandidateQueues = {};
 }
-```[cite: 2]
