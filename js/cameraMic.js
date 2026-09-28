@@ -16,36 +16,32 @@ export async function initLocalCamera(audioDeviceId = null) {
             autoGainControl: true
         };
 
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
         if (localStream) {
             localStream.getTracks().forEach(t => t.stop());
         }
 
-        if (!isMobile) {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
-            if (localStream.getAudioTracks().length > 0) {
-                localStream.getAudioTracks()[0].enabled = true;
-            }
-            return localStream;
+        // Solicita vídeo (webcam) e áudio simultaneamente de forma robusta
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }, 
+                audio: audioConstraints 
+            });
+        } catch (videoErr) {
+            console.warn("Não foi possível aceder à webcam, a tentar apenas áudio...", videoErr);
+            localStream = await navigator.mediaDevices.getUserMedia({ 
+                video: false, 
+                audio: audioConstraints 
+            });
         }
 
-        try {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
-            if (localStream.getAudioTracks().length > 0) {
-                localStream.getAudioTracks()[0].enabled = true;
-            }
-            return localStream;
-        } catch (e) {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
-            if (localStream.getAudioTracks().length > 0) {
-                localStream.getAudioTracks()[0].enabled = true;
-            }
-            return localStream;
+        if (localStream && localStream.getAudioTracks().length > 0) {
+            localStream.getAudioTracks()[0].enabled = true;
         }
+
+        return localStream;
 
     } catch (err) {
-        console.error("Erro ao abrir microfone, a tentar padrão:", err);
+        console.error("Erro crítico ao inicializar dispositivos de mídia:", err);
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
             if (localStream.getAudioTracks().length > 0) {
