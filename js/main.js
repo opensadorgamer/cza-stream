@@ -84,29 +84,44 @@ const micSelect = document.getElementById('mic-select');
             const deviceId = e.target.value;
             console.log("A trocar para o microfone externo/USB:", deviceId);
             
-            // Inicializa o novo stream com o microfone selecionado
             const stream = await initLocalCamera(deviceId);
             
             if (stream && stream.getAudioTracks().length > 0) {
                 const newAudioTrack = stream.getAudioTracks()[0];
                 newAudioTrack.enabled = true;
 
-                // Atualiza a faixa de áudio em tempo real para todos os participantes conectados (WebRTC)
+                // Atualiza o track e força renegociação SDP com os peers para o som chegar ao outro PC
                 import('./webrtc.js').then(async (webrtcMod) => {
                     const peers = webrtcMod.getPeers();
-                    Object.keys(peers).forEach(remoteUser => {
+                    const currentUser = getCurrentUser();
+
+                    for (const remoteUser of Object.keys(peers)) {
                         const pc = peers[remoteUser];
                         const senders = pc.getSenders();
                         const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
                         
                         if (audioSender) {
-                            audioSender.replaceTrack(newAudioTrack);
-                            console.log(`Faixa de áudio substituída com sucesso para o peer: ${remoteUser}`);
+                            await audioSender.replaceTrack(newAudioTrack);
+                        } else {
+                            pc.addTrack(newAudioTrack, stream);
                         }
-                    });
+
+                        // Força o envio de uma nova oferta para garantir que o outro lado recebe o áudio limpo
+                        try {
+                            if (pc.signalingState === "stable") {
+                                const offer = await pc.createOffer();
+                                await pc.setLocalDescription(offer);
+                                import('./signaling.js').then(sigMod => {
+                                    sigMod.sendSignal({ type: 'offer', sdp: offer, sender: currentUser, target: remoteUser });
+                                });
+                            }
+                        } catch (err) {
+                            console.error(`Erro ao renegociar áudio com ${remoteUser}:`, err);
+                        }
+                    }
                 });
 
-                appendSystemMessage(document.getElementById('chat-messages'), 'Microfone alterado com sucesso.');
+                appendSystemMessage(document.getElementById('chat-messages'), 'Microfone alterado e sincronizado com sucesso.');
             }
         });
     }
