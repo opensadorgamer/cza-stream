@@ -90,7 +90,6 @@ window.addEventListener('DOMContentLoaded', () => {
                 const newAudioTrack = stream.getAudioTracks()[0];
                 newAudioTrack.enabled = true;
 
-                // Atualiza a faixa de áudio em tempo real em todas as conexões ativas
                 import('./webrtc.js').then(async (webrtcMod) => {
                     const peers = webrtcMod.getPeers();
 
@@ -186,7 +185,6 @@ async function enterCallScreen(room) {
     const stream = await initLocalCamera();
     await populateAudioDevices('mic-select');
 
-    // Sincroniza o botão do microfone para garantir que ele comece ativo e sem estar vermelho
     const micBtn = document.getElementById('mic-btn');
     if (micBtn && stream && stream.getAudioTracks().length > 0) {
         stream.getAudioTracks()[0].enabled = true;
@@ -197,8 +195,8 @@ async function enterCallScreen(room) {
     const localVideo = document.getElementById('local-video');
     if (stream && (stream.getVideoTracks().length > 0 || stream.getAudioTracks().length > 0)) {
         localVideo.srcObject = stream;
-        localVideo.muted = true; // Impede absolutamente o retorno do próprio áudio no headset
-        localVideo.volume = 0;   // Garante volume zero localmente
+        localVideo.muted = true; // OBRIGATÓRIO: Silencia o áudio local no seu próprio player para evitar eco
+        localVideo.volume = 0;   // Volume zero absoluto para a tag local
         localVideo.play().catch(() => {});
         
         if (stream.getVideoTracks().length > 0) {
@@ -282,13 +280,12 @@ function renderRemoteVideo(remoteUser, remoteStream) {
     const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
     if (remoteVideo) {
         remoteVideo.srcObject = remoteStream;
-        remoteVideo.muted = false;
+        remoteVideo.muted = false; // Os remotos devem reproduzir som normalmente
         remoteVideo.play().catch(() => {});
         
         if (remoteAudioMonitors[remoteUser]) remoteAudioMonitors[remoteUser].stop();
         remoteAudioMonitors[remoteUser] = monitorAudioLevel(remoteStream, videoBox, false);
 
-        // Adiciona controle deslizante de volume individual para este usuário (se já não existir)
         let volumeControl = videoBox.querySelector('.volume-slider-container');
         if (!volumeControl) {
             volumeControl = document.createElement('div');
@@ -321,6 +318,7 @@ async function handleScreenShareToggle() {
 
         const localVideo = document.getElementById('local-video');
         localVideo.srcObject = screenStream;
+        localVideo.muted = true; // Mantém a tela compartilhada também silenciada localmente
         localVideo.play().catch(() => {});
         document.getElementById('local-placeholder').style.display = 'none';
         appendSystemMessage(document.getElementById('chat-messages'), 'Você iniciou a transmissão de tela.');
@@ -348,6 +346,8 @@ async function stopScreenShareAction() {
     const localVideo = document.getElementById('local-video');
     if (videoTrack && videoTrack.enabled) {
         localVideo.srcObject = localStream;
+        localVideo.muted = true;
+        localVideo.volume = 0;
         localVideo.play().catch(() => {});
         document.getElementById('local-placeholder').style.display = 'none';
     } else {
