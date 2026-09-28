@@ -3,25 +3,35 @@ let isScreenSharing = false;
 
 export async function startScreenShare() {
     try {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { 
+        const constraints = {
+            video: {
                 cursor: "always",
-                width: { ideal: 1920, max: 3840 },
-                height: { ideal: 1080, max: 2160 },
-                frameRate: { ideal: 60, max: 60 }
+                displaySurface: "monitor",
+                // Força resoluções e taxa de quadros estáveis para evitar engasgos na transmissão
+                width: { max: 1920, ideal: 1280 },
+                height: { max: 1080, ideal: 720 },
+                frameRate: { max: 30, ideal: 30 },
+                // Prioriza movimento fluido em vez de imagem estática (ótimo para jogos)
+                resizeMode: "crop-and-scale"
             },
             audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-                channelCount: 2
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 44100
             }
-        });
-        isScreenSharing = true;
+        };
+
+        const screenStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+        
+        // Garante que se o usuário clicar no botão nativo de parar compartilhamento, o stream encerre limpo
+        screenStream.getVideoTracks()[0].onended = () => {
+            console.log("Compartilhamento de tela encerrado pelo usuário.");
+        };
+
         return screenStream;
     } catch (error) {
-        console.error("Erro ao iniciar compartilhamento de tela:", error);
-        isScreenSharing = false;
+        console.error("Erro ao iniciar o compartilhamento de tela:", error);
         return null;
     }
 }
