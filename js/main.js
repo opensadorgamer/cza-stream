@@ -78,15 +78,35 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const micSelect = document.getElementById('mic-select');
+const micSelect = document.getElementById('mic-select');
     if (micSelect) {
         micSelect.addEventListener('change', async (e) => {
             const deviceId = e.target.value;
-            await initLocalCamera(deviceId);
-            const stream = getLocalStream();
-            const videoTrack = stream.getVideoTracks()[0];
-            if (videoTrack) {
-                await replaceVideoTrackOnAll(videoTrack);
+            console.log("A trocar para o microfone externo/USB:", deviceId);
+            
+            // Inicializa o novo stream com o microfone selecionado
+            const stream = await initLocalCamera(deviceId);
+            
+            if (stream && stream.getAudioTracks().length > 0) {
+                const newAudioTrack = stream.getAudioTracks()[0];
+                newAudioTrack.enabled = true;
+
+                // Atualiza a faixa de áudio em tempo real para todos os participantes conectados (WebRTC)
+                import('./webrtc.js').then(async (webrtcMod) => {
+                    const peers = webrtcMod.getPeers();
+                    Object.keys(peers).forEach(remoteUser => {
+                        const pc = peers[remoteUser];
+                        const senders = pc.getSenders();
+                        const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+                        
+                        if (audioSender) {
+                            audioSender.replaceTrack(newAudioTrack);
+                            console.log(`Faixa de áudio substituída com sucesso para o peer: ${remoteUser}`);
+                        }
+                    });
+                });
+
+                appendSystemMessage(document.getElementById('chat-messages'), 'Microfone alterado com sucesso.');
             }
         });
     }
