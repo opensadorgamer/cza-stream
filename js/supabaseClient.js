@@ -3,6 +3,9 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Alias de compatibilidade para evitar erros de importação nomeada em outros módulos (auth.js, etc.)
+export const supabaseClient = supabase;
+
 // Função para buscar ou criar o perfil do usuário no Supabase
 export async function fetchUserProfile(userId) {
     const { data, error } = await supabase
