@@ -362,8 +362,7 @@ function renderRemoteVideo(remoteUser, remoteStream) {
             remoteVideo.srcObject = null;
         }
 
-        // 2. Garante que a voz (microfone) seja reproduzida. 
-        // Se houver mais de uma faixa de áudio, a primeira é a voz e a segunda é a tela. Se houver apenas uma, é a voz.
+        // 2. Garante que a voz (microfone) seja reproduzida na primeira faixa de áudio
         if (audioTracks.length > 0) {
             const micStream = new MediaStream([audioTracks[0]]);
             if (remoteMicAudio.srcObject !== micStream) {
@@ -383,46 +382,6 @@ function renderRemoteVideo(remoteUser, remoteStream) {
                 remoteScreenAudio.muted = false;
                 remoteScreenAudio.play().catch(() => {});
             }
-        } else {
-            remoteScreenAudio.srcObject = null;
-        }
-        
-        if (remoteAudioMonitors[remoteUser]) remoteAudioMonitors[remoteUser].stop();
-        remoteAudioMonitors[remoteUser] = monitorAudioLevel(remoteStream, videoBox, false);
-    }
-}
-
-    const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
-    const remoteMicAudio = document.getElementById(`remote-mic-audio-${remoteUser}`);
-    const remoteScreenAudio = document.getElementById(`remote-screen-audio-${remoteUser}`);
-
-    if (remoteVideo && remoteMicAudio && remoteScreenAudio) {
-        const audioTracks = remoteStream.getAudioTracks();
-        const videoTracks = remoteStream.getVideoTracks();
-
-        // 1. Atribui apenas o vídeo de forma isolada e em mudo
-        if (videoTracks.length > 0) {
-            remoteVideo.srcObject = new MediaStream([videoTracks[0]]);
-            remoteVideo.muted = true;
-            remoteVideo.play().catch(() => {});
-        } else {
-            remoteVideo.srcObject = null;
-        }
-
-        // 2. Atribui a voz (primeira faixa de áudio) ao elemento do microfone
-        if (audioTracks.length > 0) {
-            remoteMicAudio.srcObject = new MediaStream([audioTracks[0]]);
-            remoteMicAudio.muted = false;
-            remoteMicAudio.play().catch(() => {});
-        } else {
-            remoteMicAudio.srcObject = null;
-        }
-
-        // 3. Atribui o áudio da transmissão (segunda faixa de áudio) ao elemento dedicado da tela
-        if (audioTracks.length > 1) {
-            remoteScreenAudio.srcObject = new MediaStream([audioTracks[1]]);
-            remoteScreenAudio.muted = false;
-            remoteScreenAudio.play().catch(() => {});
         } else {
             remoteScreenAudio.srcObject = null;
         }
