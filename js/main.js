@@ -269,41 +269,34 @@ function renderRemoteVideo(remoteUser, remoteStream) {
             <button class="fullscreen-btn absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-xl text-xs backdrop-blur-md transition cursor-pointer border border-gray-700/50 z-10">
                 <i class="fa-solid fa-expand"></i>
             </button>
+            <div class="volume-slider-container absolute top-3 left-3 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-gray-700/50 px-2.5 py-1.5 rounded-xl text-xs text-white flex items-center gap-2 z-10 transition">
+                <i class="fa-solid fa-volume-high text-[10px]"></i>
+                <input type="range" min="0" max="1" step="0.05" value="1" class="w-16 cursor-pointer accent-indigo-500">
+            </div>
         `;
         grid.appendChild(videoBox);
         
         videoBox.querySelector('.fullscreen-btn').addEventListener('click', () => {
             toggleFullscreen(videoBox);
         });
+
+        const slider = videoBox.querySelector('input');
+        const remoteVideo = videoBox.querySelector('video');
+        slider.addEventListener('input', (e) => {
+            remoteVideo.volume = e.target.value;
+        });
     }
 
     const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
     if (remoteVideo) {
         remoteVideo.srcObject = remoteStream;
-        remoteVideo.muted = false; // Os remotos devem reproduzir som normalmente
+        remoteVideo.muted = false;
         remoteVideo.play().catch(() => {});
         
         if (remoteAudioMonitors[remoteUser]) remoteAudioMonitors[remoteUser].stop();
         remoteAudioMonitors[remoteUser] = monitorAudioLevel(remoteStream, videoBox, false);
-
-        let volumeControl = videoBox.querySelector('.volume-slider-container');
-        if (!volumeControl) {
-            volumeControl = document.createElement('div');
-            volumeControl.className = 'volume-slider-container absolute top-3 left-3 bg-black/60 hover:bg-black/80 backdrop-blur-md border border-gray-700/50 px-2.5 py-1.5 rounded-xl text-xs text-white flex items-center gap-2 z-10 transition';
-            volumeControl.innerHTML = `
-                <i class="fa-solid fa-volume-high text-[10px]"></i>
-                <input type="range" min="0" max="1" step="0.05" value="1" class="w-16 cursor-pointer accent-indigo-500">
-            `;
-            videoBox.appendChild(volumeControl);
-
-            const slider = volumeControl.querySelector('input');
-            slider.addEventListener('input', (e) => {
-                remoteVideo.volume = e.target.value;
-            });
-        }
     }
 }
-
 async function handleScreenShareToggle() {
     const btn = document.getElementById('screen-btn');
     const isSharing = getIsScreenSharing();
