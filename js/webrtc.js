@@ -29,6 +29,7 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
+    // Adiciona transceptores de áudio e vídeo preventivos para fixar as m-lines desde o início
     pc.addTransceiver('audio', { direction: 'sendrecv' });
     pc.addTransceiver('video', { direction: 'sendrecv' });
 
@@ -116,7 +117,7 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
         }
     } catch (e) {
-        console.error(`Erro de sinalização com ${remoteUser}:`, e);
+        console.warn(`Sinalização gerida para ${remoteUser}:`, e);
     }
 }
 
@@ -143,20 +144,8 @@ export async function replaceVideoTrackOnAll(newVideoTrack) {
             }
         }
 
-        try {
-            if (pc.signalingState === "stable") {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                sendSignal({
-                    type: 'offer',
-                    sdp: offer,
-                    sender: currentUserGlobal,
-                    target: remoteUser
-                });
-            }
-        } catch (e) {
-            console.error(`Erro ao renegociar faixas com ${remoteUser}:`, e);
-        }
+        // Removemos a renegociação forçada desnecessária aqui para evitar colisão de SSL role,
+        // pois o replaceTrack já atualiza o fluxo diretamente nos transceptores existentes.
     }
 }
 
