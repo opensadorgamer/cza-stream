@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meet & Chat Pro - Discord Edition</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body class="text-gray-100 min-h-screen flex flex-col antialiased selection:bg-indigo-600 selection:text-white">
+
+    <!-- TELA DE AUTENTICAÇÃO -->
+    <div id="auth-screen" class="flex-1 flex items-center justify-center p-4 relative overflow-hidden">
+        <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="bg-[#111827]/90 backdrop-blur-xl border border-gray-800/80 p-8 rounded-3xl shadow-2xl w-full max-w-md relative z-10 transition-all">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-tr from-indigo-600 to-violet-500 text-white rounded-2xl shadow-lg shadow-indigo-600/30 mb-4 text-2xl">
+                    <i class="fa-solid fa-comments"></i>
+                </div>
+                <h1 class="text-2xl font-black tracking-tight text-white">Meet & Chat Pro</h1>
+                <p class="text-xs text-gray-400 mt-1">Plataforma Segura com Banco PostgreSQL</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Usuário Único</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-500 text-sm"><i class="fa-solid fa-at"></i></span>
+                        <input type="text" id="auth-username" placeholder="Seu apelido exclusivo" class="w-full bg-[#0b0f19] border border-gray-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Senha de Acesso</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-500 text-sm"><i class="fa-solid fa-lock"></i></span>
+                        <input type="password" id="auth-password" placeholder="Sua senha secreta" class="w-full bg-[#0b0f19] border border-gray-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 pt-2">
+                    <button id="register-btn" class="bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold py-3 px-4 rounded-xl transition cursor-pointer text-xs flex items-center justify-center gap-2 border border-gray-700/50">
+                        <i class="fa-solid fa-user-plus"></i> Criar Conta
+                    </button>
+                    <button id="login-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-indigo-600/30 transition cursor-pointer text-xs flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-right-to-bracket"></i> Entrar
+                    </button>
+                </div>
+            </div>
+            <div id="auth-error" class="hidden mt-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl text-center"></div>
+        </div>
+    </div>
+
+    <!-- TELA DE SELEÇÃO DE SALA / CANAL -->
+    <div id="lobby-screen" class="hidden flex-1 flex items-center justify-center p-4">
+        <div class="bg-[#111827]/90 backdrop-blur-xl border border-gray-800/80 p-8 rounded-3xl shadow-2xl w-full max-w-md relative z-10">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-white">Bem-vindo, <span id="logged-user-name" class="text-indigo-400"></span></h2>
+                    <p class="text-xs text-gray-400">Selecione ou crie uma sala de voz/vídeo</p>
+                </div>
+                <button id="logout-btn" title="Sair da Conta" class="w-10 h-10 rounded-xl bg-gray-800 hover:bg-rose-600/20 text-gray-400 hover:text-rose-400 flex items-center justify-center transition cursor-pointer border border-gray-700">
+                    <i class="fa-solid fa-power-off"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Código da Sala / Canal</label>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-500 text-sm"><i class="fa-solid fa-hashtag"></i></span>
+                            <input type="text" id="room-input" placeholder="Ex: 123" class="w-full bg-[#0b0f19] border border-gray-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition">
+                        </div>
+                        <button id="generate-room-btn" type="button" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 rounded-xl text-xs font-semibold transition cursor-pointer border border-gray-700">Gerar</button>
+                    </div>
+                </div>
+
+                <button id="join-room-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl shadow-lg shadow-emerald-600/30 transition cursor-pointer text-xs flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-headset"></i> Entrar na Sala de Voz/Vídeo
+                </button>
+            </div>
+            <div id="lobby-error" class="hidden mt-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl text-center"></div>
+        </div>
+    </div>
+
+    <!-- TELA DA CHAMADA -->
+    <div id="call-screen" class="hidden flex-1 flex h-screen overflow-hidden">
+        
+        <!-- SIDEBAR ESQUERDA -->
+        <div class="w-64 bg-[#0e131f] border-r border-gray-800 flex flex-col shrink-0">
+            <div class="p-4 border-b border-gray-800/80 flex items-center justify-between">
+                <span class="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-indigo-400"></i> Servidor CzA
+                </span>
+            </div>
+            <div class="p-3 border-b border-gray-800/40 bg-[#111827]/40 flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span class="text-xs font-semibold text-gray-300 truncate"># <span id="sidebar-room-name">geral</span></span>
+            </div>
+            
+            <div class="flex-1 p-3 overflow-y-auto space-y-1.5" id="online-users-list">
+                <div class="text-[11px] font-bold text-gray-500 uppercase tracking-wider px-2 py-1">Membros Online</div>
+            </div>
+
+            <div class="p-3 border-t border-gray-800 bg-[#0b0f19] flex items-center justify-between">
+                <div class="flex items-center gap-2 truncate">
+                    <div class="w-8 h-8 rounded-full bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-xs">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                    <div class="truncate">
+                        <div id="sidebar-username" class="text-xs font-bold text-white truncate">Usuário</div>
+                        <div class="text-[10px] text-emerald-400 font-medium">Online</div>
+                    </div>
+                </div>
+                <button id="leave-call-sidebar-btn" title="Sair" class="text-gray-400 hover:text-rose-400 p-2 transition cursor-pointer">
+                    <i class="fa-solid fa-phone-slash text-xs"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ÁREA CENTRAL DE VÍDEOS -->
+        <div class="flex-1 flex flex-col bg-[#0b0f19] p-4 relative overflow-hidden">
+            <div class="flex justify-between items-center bg-[#111827]/80 backdrop-blur-md border border-gray-800 px-5 py-3 rounded-2xl mb-4 z-10 shadow-lg">
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
+                        <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></span>
+                        <span class="text-xs text-emerald-400 font-bold uppercase tracking-wider">Conectado</span>
+                    </div>
+                    <span class="text-xs text-gray-300 font-medium">Canal: <strong id="display-room" class="text-white bg-gray-800 px-2.5 py-1 rounded-lg"></strong></span>
+                </div>
+                <div class="text-xs text-gray-400">Logado como: <strong id="display-username" class="text-white"></strong></div>
+            </div>
+
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 items-center justify-center overflow-y-auto mb-4">
+                <!-- Local Video -->
+                <div class="video-box relative bg-[#111827] rounded-3xl overflow-hidden border border-gray-800 aspect-video flex items-center justify-center shadow-2xl">
+                    <video id="local-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                    <div id="local-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 text-sm bg-[#0b0f19]/90">
+                        <div class="w-16 h-16 rounded-2xl bg-[#111827] border border-gray-800 flex items-center justify-center text-gray-400 mb-3 text-xl">
+                            <i class="fa-solid fa-video-slash"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-400">Câmera indisponível ou desligada</span>
+                    </div>
+                    <div class="absolute bottom-3 left-3 bg-[#0b0f19]/80 backdrop-blur-md border border-gray-800 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-gray-200 flex items-center gap-2">
+                        <i class="fa-solid fa-user text-indigo-400 text-[10px]"></i> <span id="local-label">Você</span>
+                    </div>
+                    <button class="fullscreen-btn absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-xl text-xs backdrop-blur-md transition cursor-pointer border border-gray-700/50">
+                        <i class="fa-solid fa-expand"></i>
+                    </button>
+                </div>
+
+                <!-- Remote Video -->
+                <div class="video-box relative bg-[#111827] rounded-3xl overflow-hidden border border-gray-800 aspect-video flex items-center justify-center shadow-2xl">
+                    <video id="remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
+                    
+                    <div id="remote-status" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 text-sm bg-[#0b0f19]/90 z-20">
+                        <div class="w-16 h-16 rounded-2xl bg-[#111827] border border-gray-800 flex items-center justify-center text-indigo-400 mb-3 text-xl animate-pulse">
+                            <i class="fa-solid fa-user-clock"></i>
+                        </div>
+                        <span id="remote-status-text" class="text-xs font-medium text-gray-400">Aguardando participante entrar...</span>
+                    </div>
+
+                    <div class="absolute bottom-3 left-3 bg-[#0b0f19]/80 backdrop-blur-md border border-gray-800 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-gray-200 flex items-center gap-2 z-10">
+                        <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                        <span id="remote-label">Participante Remoto</span>
+                    </div>
+                    <button class="fullscreen-btn absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-xl text-xs backdrop-blur-md transition cursor-pointer border border-gray-700/50 z-10">
+                        <i class="fa-solid fa-expand"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Controles de Mídia -->
+            <div class="flex justify-center items-center gap-3 bg-[#111827]/80 backdrop-blur-md border border-gray-800 p-3 rounded-2xl shadow-2xl">
+                <button id="mic-btn" title="Mutar Microfone" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 flex items-center justify-center transition cursor-pointer text-sm">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+                <button id="cam-btn" title="Desligar Câmera" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 flex items-center justify-center transition cursor-pointer text-sm">
+                    <i class="fa-solid fa-video"></i>
+                </button>
+                <button id="screen-btn" title="Compartilhar Tela" class="w-12 h-12 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 flex items-center justify-center transition cursor-pointer text-sm">
+                    <i class="fa-solid fa-desktop"></i>
+                </button>
+                <button id="leave-call-btn" title="Sair da Chamada" class="w-12 h-12 rounded-xl bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition shadow-lg shadow-rose-600/30 cursor-pointer text-sm">
+                    <i class="fa-solid fa-phone-slash"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Lateral -->
+        <div class="w-80 bg-[#111827]/90 border-l border-gray-800 flex flex-col h-full shadow-2xl shrink-0">
+            <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                <h3 class="font-bold text-xs tracking-wider uppercase text-gray-300 flex items-center gap-2">
+                    <i class="fa-solid fa-comments text-indigo-400"></i> Chat do Canal
+                </h3>
+                <span class="text-[10px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-semibold">PostgreSQL</span>
+            </div>
+            
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-3 text-xs">
+                <div class="text-center text-gray-500 italic my-2 text-[11px]">Mensagens sincronizadas em tempo real.</div>
+            </div>
+
+            <div class="p-3 border-t border-gray-800 bg-[#0b0f19]/60">
+                <form id="chat-form" class="flex gap-2">
+                    <input type="text" id="chat-input" placeholder="Enviar mensagem..." class="flex-1 bg-[#111827] border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer shadow-md shadow-indigo-600/30 flex items-center justify-center">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module" src="./js/main.js"></script>
+</body>
+</html>

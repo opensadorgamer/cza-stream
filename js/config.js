@@ -1,0 +1,2 @@
+export const SUPABASE_URL = 'https://ktwtxrhykpryjnewlmed.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt0d3R4cmh5a3ByeWpuZXdsbWVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1ODAyNjIsImV4cCI6MjEwNjE1NjI2Mn0.rjFUBlNvQPPKJtd7nWOGiBzL06t_3DsD-FMpE7E6RVk';
