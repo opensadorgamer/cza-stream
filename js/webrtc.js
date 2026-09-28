@@ -13,8 +13,7 @@ const rtcConfig = {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
-        { urls: 'stun:stun.stunprotocol.org:3478' },
-        { urls: 'stun:openrelay.metered.ca:80' }
+        { urls: 'stun:stun.stunprotocol.org:3478' }
     ]
 };
 
@@ -30,6 +29,7 @@ export function createPeerConnection(currentUser, onRemoteStreamCallback, onStat
 
     peerConnection = new RTCPeerConnection(rtcConfig);
 
+    // CORREÇÃO CRUCIAL: Adiciona todas as faixas (Áudio e Vídeo/Tela) do stream local atual à conexão P2P
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     if (activeStream) {
         activeStream.getTracks().forEach(track => {
