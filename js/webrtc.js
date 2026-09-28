@@ -4,6 +4,7 @@ import { getScreenStream, getIsScreenSharing } from './screenShare.js';
 
 let peers = {}; // Ex: { 'ari2': RTCPeerConnection, 'ari3': RTCPeerConnection }
 let iceCandidateQueues = {};
+let currentUserGlobal = null; // Armazena o utilizador atual para uso interno nas renegociações
 
 const rtcConfig = {
     iceServers: [
@@ -23,6 +24,7 @@ export function getPeers() {
 export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStreamCallback) {
     if (peers[remoteUser]) return peers[remoteUser];
 
+    currentUserGlobal = currentUser;
     const pc = new RTCPeerConnection(rtcConfig);
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
@@ -56,6 +58,7 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
 }
 
 export async function handleSignalingData(data, currentUser, onRemoteStreamCallback) {
+    currentUserGlobal = currentUser;
     const remoteUser = data.sender;
     if (!remoteUser || remoteUser === currentUser) return;
 
@@ -109,21 +112,44 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
     }
 }
 
-// CORREÇÃO: Substitui o vídeo existente ou adiciona a faixa se não houver câmara ativa
+// CORREÇÃO ROBUSTA: Substitui o vídeo ou adiciona a faixa e força renegociação automática se necessário
 export async function replaceVideoTrackOnAll(newTrack) {
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     
-    Object.keys(peers).forEach(remoteUser => {
+    for (const remoteUser of Object.keys(peers)) {
         const pc = peers[remoteUser];
         const senders = pc.getSenders();
         const videoSender = senders.find(s => s.track && s.track.kind === 'video');
 
         if (videoSender) {
-            videoSender.replaceTrack(newTrack);
+            // Se já existe um remetente de vídeo, apenas substitui a faixa em tempo real
+            await videoSender.replaceTrack(newTrack);
         } else if (newTrack && activeStream) {
-            pc.addTrack(newTrack, activeStream);
+            // Se não existe (ex: PC sem webcam a iniciar partilha de tela), adiciona a faixa e renegocia
+            activeStream.getTracks().forEach(track => {
+                // Evita adicionar faixas duplicadas que já existam
+                if (!senders.some(s => s.track === track)) {
+                    pc.addTrack(track, activeStream);
+                }
+            });
+
+            // Dispara nova oferta (renegociação) para que o outro peer receba a nova faixa de vídeo
+            try {
+                if (pc.signalingState === "stable") {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    sendSignal({
+                        type: 'offer',
+                        sdp: offer,
+                        sender: currentUserGlobal,
+                        target: remoteUser
+                    });
+                }
+            } catch (e) {
+                console.error(`Erro ao renegociar faixa de vídeo com ${remoteUser}:`, e);
+            }
         }
-    });
+    }
 }
 
 export function closeAllPeers() {
