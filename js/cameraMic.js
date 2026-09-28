@@ -6,24 +6,16 @@ export async function initLocalCamera(audioDeviceId = null) {
         currentAudioDeviceId = audioDeviceId;
         const audioConstraints = audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true;
 
-        // Verifica se o dispositivo possui alguma câmara ligada
-        let hasVideoInput = false;
-        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            hasVideoInput = devices.some(device => device.kind === 'videoinput');
-        }
-
-        if (!hasVideoInput) {
-            console.log("PC sem webcam detetado. A solicitar estritamente apenas áudio...");
-            localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
-            return localStream;
-        }
-
-        // Se tiver câmara, tenta abrir vídeo e áudio juntos
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
+        // Tenta abrir APENAS áudio se soubermos que é um ambiente sem câmara ou por segurança,
+        // mas vamos tentar com vídeo apenas se o utilizador quiser explicitamente ou se houver hardware válido.
+        // Como o seu PC não tem webcam, vamos forçar explicitamente video: false para evitar qualquer NotReadableError.
+        
+        console.log("A inicializar áudio com restrições:", audioConstraints);
+        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraints });
         return localStream;
+
     } catch (err) {
-        console.warn("Falha ao abrir câmara, a utilizar fallback limpo para apenas áudio...", err);
+        console.warn("Falha ao abrir áudio com dispositivo específico, a tentar microfone padrão...", err);
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
             return localStream;
