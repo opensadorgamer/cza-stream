@@ -2,9 +2,8 @@ import { sendSignal } from './signaling.js';
 import { getLocalStream } from './cameraMic.js';
 import { getScreenStream, getIsScreenSharing } from './screenShare.js';
 
-let peerConnection = null;
-let iceCandidateQueue = [];
-let remoteDescProcessed = false;
+let peers = {}; // Ex: { 'ari2': RTCPeerConnection, 'ari3': RTCPeerConnection }
+let iceCandidateQueues = {};
 
 const rtcConfig = {
     iceServers: [
@@ -17,123 +16,115 @@ const rtcConfig = {
     ]
 };
 
-export function getPeerConnection() {
-    return peerConnection;
+export function getPeers() {
+    return peers;
 }
 
-export function createPeerConnection(currentUser, onRemoteStreamCallback, onStatusUpdateCallback) {
-    if (peerConnection) return peerConnection;
+export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStreamCallback) {
+    if (peers[remoteUser]) return peers[remoteUser];
 
-    remoteDescProcessed = false;
-    iceCandidateQueue = [];
+    const pc = new RTCPeerConnection(rtcConfig);
+    peers[remoteUser] = pc;
+    iceCandidateQueues[remoteUser] = [];
 
-    peerConnection = new RTCPeerConnection(rtcConfig);
-
-    // CORREÇÃO CRUCIAL: Adiciona todas as faixas (Áudio e Vídeo/Tela) do stream local atual à conexão P2P
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     if (activeStream) {
         activeStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, activeStream);
+            pc.addTrack(track, activeStream);
         });
     }
 
-    peerConnection.onnegotiationneeded = async () => {
-        try {
-            if (peerConnection.signalingState !== "stable") return;
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            sendSignal({ type: 'offer', sdp: offer, sender: currentUser });
-        } catch (e) {
-            console.error("Erro na renegociação WebRTC:", e);
-        }
-    };
-
-    peerConnection.ontrack = event => {
-        if (onRemoteStreamCallback && event.streams && event.streams[0]) {
-            onRemoteStreamCallback(event.streams[0]);
-        }
-        if (onStatusUpdateCallback) {
-            onStatusUpdateCallback();
-        }
-    };
-
-    peerConnection.onicecandidate = event => {
+    pc.onicecandidate = event => {
         if (event.candidate) {
-            sendSignal({ type: 'candidate', candidate: event.candidate, sender: currentUser });
+            sendSignal({
+                type: 'candidate',
+                candidate: event.candidate,
+                sender: currentUser,
+                target: remoteUser
+            });
         }
     };
 
-    return peerConnection;
+    pc.ontrack = event => {
+        if (onRemoteStreamCallback && event.streams && event.streams[0]) {
+            onRemoteStreamCallback(remoteUser, event.streams[0]);
+        }
+    };
+
+    return pc;
 }
 
-export async function handleSignalingData(data, currentUser, onRemoteStreamCallback, onStatusUpdateCallback) {
-    if (!peerConnection) {
-        createPeerConnection(currentUser, onRemoteStreamCallback, onStatusUpdateCallback);
+export async function handleSignalingData(data, currentUser, onRemoteStreamCallback) {
+    const remoteUser = data.sender;
+    if (!remoteUser || remoteUser === currentUser) return;
+
+    let pc = peers[remoteUser];
+    if (!pc) {
+        pc = createPeerConnectionForUser(remoteUser, currentUser, onRemoteStreamCallback);
     }
 
     try {
         if (data.type === 'offer') {
-            if (peerConnection.signalingState !== "stable") {
-                await peerConnection.setLocalDescription({ type: "rollback" }).catch(() => {});
+            if (pc.signalingState !== "stable") {
+                await pc.setLocalDescription({ type: "rollback" }).catch(() => {});
             }
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-            remoteDescProcessed = true;
+            await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
 
-            while (iceCandidateQueue.length > 0) {
-                const candidate = iceCandidateQueue.shift();
-                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+            while (iceCandidateQueues[remoteUser] && iceCandidateQueues[remoteUser].length > 0) {
+                const candidate = iceCandidateQueues[remoteUser].shift();
+                await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
             }
 
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            sendSignal({ type: 'answer', sdp: answer, sender: currentUser });
-
-            if (onStatusUpdateCallback) onStatusUpdateCallback();
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            sendSignal({
+                type: 'answer',
+                sdp: answer,
+                sender: currentUser,
+                target: remoteUser
+            });
 
         } else if (data.type === 'answer') {
-            if (peerConnection.signalingState === "have-local-offer") {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
-                remoteDescProcessed = true;
+            if (pc.signalingState === "have-local-offer") {
+                await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
 
-                while (iceCandidateQueue.length > 0) {
-                    const candidate = iceCandidateQueue.shift();
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+                while (iceCandidateQueues[remoteUser] && iceCandidateQueues[remoteUser].length > 0) {
+                    const candidate = iceCandidateQueues[remoteUser].shift();
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
                 }
-
-                if (onStatusUpdateCallback) onStatusUpdateCallback();
             }
         } else if (data.type === 'candidate') {
             if (data.candidate) {
-                if (remoteDescProcessed && peerConnection.remoteDescription) {
-                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
+                if (pc.remoteDescription) {
+                    await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
                 } else {
-                    iceCandidateQueue.push(data.candidate);
+                    if (!iceCandidateQueues[remoteUser]) iceCandidateQueues[remoteUser] = [];
+                    iceCandidateQueues[remoteUser].push(data.candidate);
                 }
             }
         }
     } catch (e) {
-        console.error("Erro no processamento de sinalização WebRTC:", e);
+        console.error(`Erro de sinalização com ${remoteUser}:`, e);
     }
 }
 
-export async function replaceVideoTrack(newTrack) {
-    if (!peerConnection) return;
-    const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-    if (sender) {
-        await sender.replaceTrack(newTrack);
-    } else if (newTrack) {
-        const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
-        if (activeStream) {
-            peerConnection.addTrack(newTrack, activeStream);
+export async function replaceVideoTrackOnAll(newTrack) {
+    Object.keys(peers).forEach(remoteUser => {
+        const pc = peers[remoteUser];
+        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) {
+            sender.replaceTrack(newTrack);
         }
-    }
+    });
 }
 
-export function closePeerConnection() {
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
-    iceCandidateQueue = [];
-    remoteDescProcessed = false;
+export function closeAllPeers() {
+    Object.keys(peers).forEach(remoteUser => {
+        if (peers[remoteUser]) {
+            peers[remoteUser].close();
+            delete peers[remoteUser];
+        }
+    });
+    peers = {};
+    iceCandidateQueues = {};
 }
