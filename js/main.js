@@ -195,7 +195,7 @@ async function enterCallScreen(room) {
     const localVideo = document.getElementById('local-video');
     if (stream && (stream.getVideoTracks().length > 0 || stream.getAudioTracks().length > 0)) {
         localVideo.srcObject = stream;
-        localVideo.muted = true; // OBRIGATÓRIO: Silencia o áudio local no seu próprio player para evitar eco
+        localVideo.muted = true; // Impede o eco local
         localVideo.volume = 0;   // Volume zero absoluto para a tag local
         localVideo.play().catch(() => {});
         
@@ -297,6 +297,7 @@ function renderRemoteVideo(remoteUser, remoteStream) {
         remoteAudioMonitors[remoteUser] = monitorAudioLevel(remoteStream, videoBox, false);
     }
 }
+
 async function handleScreenShareToggle() {
     const btn = document.getElementById('screen-btn');
     const isSharing = getIsScreenSharing();
@@ -311,7 +312,7 @@ async function handleScreenShareToggle() {
 
         const localVideo = document.getElementById('local-video');
         localVideo.srcObject = screenStream;
-        localVideo.muted = true; // Mantém a tela compartilhada também silenciada localmente
+        localVideo.muted = true;
         localVideo.play().catch(() => {});
         document.getElementById('local-placeholder').style.display = 'none';
         appendSystemMessage(document.getElementById('chat-messages'), 'Você iniciou a transmissão de tela.');
