@@ -323,6 +323,7 @@ function renderRemoteVideo(remoteUser, remoteStream) {
             toggleFullscreen(videoBox);
         });
 
+        // Configuração dos eventos de input para os sliders
         const micSlider = document.getElementById(`vol-mic-${remoteUser}`);
         const screenSlider = document.getElementById(`vol-screen-${remoteUser}`);
         const remoteVideo = document.getElementById(`remote-video-${remoteUser}`);
@@ -344,21 +345,22 @@ function renderRemoteVideo(remoteUser, remoteStream) {
         const audioTracks = remoteStream.getAudioTracks();
         const videoTracks = remoteStream.getVideoTracks();
 
-        if (videoTracks.length > 0) {
+        // Sempre atribui o stream completo ao elemento de vídeo principal (reproduz a voz e a imagem)
+        if (videoTracks.length > 0 || audioTracks.length > 0) {
             remoteVideo.srcObject = remoteStream;
             remoteVideo.muted = false;
             remoteVideo.play().catch(() => {});
         }
 
+        // Se o utilizador remoto estiver a transmitir o áudio do sistema/jogo (segunda faixa de áudio)
         if (audioTracks.length > 1) {
             const screenAudioStream = new MediaStream([audioTracks[1]]);
             remoteScreenAudio.srcObject = screenAudioStream;
             remoteScreenAudio.muted = false;
             remoteScreenAudio.play().catch(() => {});
-        } else if (audioTracks.length === 1) {
-            remoteVideo.srcObject = remoteStream;
-            remoteVideo.muted = false;
-            remoteVideo.play().catch(() => {});
+        } else {
+            // Se não houver áudio de tela, limpa o elemento de áudio dedicado para evitar conflitos
+            remoteScreenAudio.srcObject = null;
         }
         
         if (remoteAudioMonitors[remoteUser]) remoteAudioMonitors[remoteUser].stop();
