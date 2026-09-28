@@ -29,7 +29,6 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Otimização para alta qualidade de áudio e vídeo com múltiplos fluxos simultâneos
     pc.addTransceiver('audio', { direction: 'sendrecv' });
     pc.addTransceiver('video', { direction: 'sendrecv' });
 
@@ -46,7 +45,7 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
         });
     }
 
-    // Aplicação de bitrate otimizado para qualidade máxima em 1080p60 sem travar
+    // Limita o bitrate para 2.8 Mbps para zerar a perda de pacotes na internet
     setTimeout(() => {
         const senders = pc.getSenders();
         const videoSender = senders.find(s => s.track && s.track.kind === 'video');
@@ -55,9 +54,9 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
             if (!parameters.encodings) {
                 parameters.encodings = [{}];
             }
-            parameters.encodings[0].maxBitrate = 4500000; // 4.5 Mbps para nitidez perfeita de cinema
+            parameters.encodings[0].maxBitrate = 2800000; // 2.8 Mbps (Ideal contra packet loss)
             parameters.encodings[0].maxFramerate = 60;
-            videoSender.setParameters(parameters).catch(e => console.warn("Erro ao definir parâmetros de vídeo:", e));
+            videoSender.setParameters(parameters).catch(e => console.warn("Erro ao definir bitrate:", e));
         }
     }, 1000);
 
@@ -159,13 +158,12 @@ export async function replaceVideoTrackOnAll(newVideoTrack, newAudioTrack = null
             }
         }
 
-        // Garante o ajuste de bitrate atualizado na substituição de faixas
         const updatedSenders = pc.getSenders();
         const updatedVideoSender = updatedSenders.find(s => s.track && s.track.kind === 'video');
         if (updatedVideoSender) {
             const parameters = updatedVideoSender.getParameters();
             if (!parameters.encodings) parameters.encodings = [{}];
-            parameters.encodings[0].maxBitrate = 4500000;
+            parameters.encodings[0].maxBitrate = 2800000;
             parameters.encodings[0].maxFramerate = 60;
             updatedVideoSender.setParameters(parameters).catch(() => {});
         }
