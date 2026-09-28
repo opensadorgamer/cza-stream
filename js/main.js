@@ -78,7 +78,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-const micSelect = document.getElementById('mic-select');
+    const micSelect = document.getElementById('mic-select');
     if (micSelect) {
         micSelect.addEventListener('change', async (e) => {
             const deviceId = e.target.value;
@@ -197,7 +197,8 @@ async function enterCallScreen(room) {
     const localVideo = document.getElementById('local-video');
     if (stream && (stream.getVideoTracks().length > 0 || stream.getAudioTracks().length > 0)) {
         localVideo.srcObject = stream;
-        localVideo.muted = true;
+        localVideo.muted = true; // Impede absolutamente o retorno do próprio áudio no headset
+        localVideo.volume = 0;   // Garante volume zero localmente
         localVideo.play().catch(() => {});
         
         if (stream.getVideoTracks().length > 0) {
