@@ -7,11 +7,11 @@ export async function startScreenShare() {
             video: {
                 cursor: "always",
                 displaySurface: "monitor",
-                // Qualidade máxima ideal: 1080p a 60 FPS para imagem perfeita e fluida em jogos
+                // Força resolução nítida em Full HD com taxa de quadros fluida para jogos
                 width: { ideal: 1920, max: 1920 },
                 height: { ideal: 1080, max: 1080 },
                 frameRate: { ideal: 60, max: 60 },
-                resizeMode: "none" // Mantém a resolução nativa sem cortes automáticos feios
+                resizeMode: "none" // Evita reescalonamento automático que borra a imagem
             },
             audio: {
                 echoCancellation: true,
@@ -21,15 +21,22 @@ export async function startScreenShare() {
             }
         };
 
-        const screenStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+        // Captura o fluxo de tela do sistema/jogo
+        const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
         
+        screenStream = stream;
+        isScreenSharing = true;
+
+        // Trata o encerramento nativo da partilha de tela (botão de parar do navegador)
         screenStream.getVideoTracks()[0].onended = () => {
             console.log("Compartilhamento de tela encerrado pelo usuário.");
+            stopScreenShare();
         };
 
         return screenStream;
     } catch (error) {
         console.error("Erro ao iniciar o compartilhamento de tela:", error);
+        isScreenSharing = false;
         return null;
     }
 }
