@@ -29,19 +29,14 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
+    // Cria canais base para a comunicação (Voz e Vídeo da câmara)
     pc.addTransceiver('audio', { direction: 'sendrecv' });
     pc.addTransceiver('video', { direction: 'sendrecv' });
 
-    const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
-    if (activeStream && activeStream.getTracks().length > 0) {
-        const senders = pc.getSenders();
-        activeStream.getTracks().forEach(track => {
-            const sender = senders.find(s => s.track && s.track.kind === track.kind);
-            if (sender) {
-                sender.replaceTrack(track);
-            } else {
-                pc.addTrack(track, activeStream);
-            }
+    const localStream = getLocalStream();
+    if (localStream) {
+        localStream.getTracks().forEach(track => {
+            pc.addTrack(track, localStream);
         });
     }
 
@@ -89,17 +84,11 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
 
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
-            sendSignal({
-                type: 'answer',
-                sdp: answer,
-                sender: currentUser,
-                target: remoteUser
-            });
+            sendSignal({ type: 'answer', sdp: answer, sender: currentUser, target: remoteUser });
 
         } else if (data.type === 'answer') {
             if (pc.signalingState === "have-local-offer") {
                 await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-
                 while (iceCandidateQueues[remoteUser] && iceCandidateQueues[remoteUser].length > 0) {
                     const candidate = iceCandidateQueues[remoteUser].shift();
                     await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
@@ -120,43 +109,48 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
     }
 }
 
-export async function replaceVideoTrackOnAll(newVideoTrack) {
+// Nova função adaptada para lidar tanto com o vídeo quanto com o áudio do sistema/tela
+export async function replaceVideoTrackOnAll(newVideoTrack, newAudioTrack = null) {
     const localStream = getLocalStream();
-    const localAudioTrack = localStream ? localStream.getAudioTracks()[0] : null;
+    const localMicTrack = localStream ? localStream.getAudioTracks()[0] : null;
 
     for (const remoteUser of Object.keys(peers)) {
         const pc = peers[remoteUser];
         const senders = pc.getSenders();
         
+        // Mantém a voz (microfone) no primeiro canal de áudio
         const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-        if (audioSender && localAudioTrack) {
-            audioSender.replaceTrack(localAudioTrack);
+        if (audioSender && localMicTrack) {
+            audioSender.replaceTrack(localMicTrack);
         }
 
+        // Substitui ou adiciona o vídeo da tela
         const videoSender = senders.find(s => s.track && s.track.kind === 'video');
         if (videoSender) {
             await videoSender.replaceTrack(newVideoTrack);
         } else {
-            const screenStream = getScreenStream();
-            if (screenStream) {
-                pc.addTrack(newVideoTrack, screenStream);
+            pc.addTrack(newVideoTrack, getScreenStream() || localStream);
+        }
+
+        // Se houver áudio da tela (jogo/sistema), adiciona como um canal secundário de áudio
+        if (newAudioTrack) {
+            const screenAudioSender = senders.filter(s => s.track && s.track.kind === 'audio')[1];
+            if (screenAudioSender) {
+                await screenAudioSender.replaceTrack(newAudioTrack);
+            } else {
+                pc.addTrack(newAudioTrack, getScreenStream());
             }
         }
 
-        // Restaura a renegociação segura para avisar o peer remoto da nova faixa de vídeo/tela
+        // Avisa o outro utilizador das novas faixas (Renegociação Essencial)
         try {
             if (pc.signalingState === "stable") {
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
-                sendSignal({
-                    type: 'offer',
-                    sdp: offer,
-                    sender: currentUserGlobal,
-                    target: remoteUser
-                });
+                sendSignal({ type: 'offer', sdp: offer, sender: currentUserGlobal, target: remoteUser });
             }
         } catch (e) {
-            console.error(`Erro ao renegociar faixa de vídeo com ${remoteUser}:`, e);
+            console.error(`Erro ao renegociar faixa de vídeo/áudio com ${remoteUser}:`, e);
         }
     }
 }
