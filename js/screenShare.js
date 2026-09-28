@@ -1,37 +1,32 @@
-let screenStream = null;
-let isScreenSharing = false;
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
-export async function startScreenShare() {
-    try {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { cursor: "always" },
-            audio: true // Captura o som do jogo/sistema junto com a imagem
-        });
-        isScreenSharing = true;
-        return screenStream;
-    } catch (error) {
-        console.error("Erro ao iniciar compartilhamento de tela:", error);
-        isScreenSharing = false;
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Função para buscar ou criar o perfil do usuário no Supabase
+export async function fetchUserProfile(userId) {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+    if (error) {
+        console.warn("Perfil não encontrado ou erro ao buscar:", error.message);
         return null;
     }
+    return data;
 }
 
-export function stopScreenShare() {
-    if (screenStream) {
-        screenStream.getTracks().forEach(track => track.stop());
-        screenStream = null;
+export async function updateUserProfile(userId, updates) {
+    const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId);
+
+    if (error) {
+        console.error("Erro ao atualizar perfil:", error.message);
+        return false;
     }
-    isScreenSharing = false;
-}
-
-export function getScreenStream() {
-    return screenStream;
-}
-
-export function getIsScreenSharing() {
-    return isScreenSharing;
-}
-
-export function setIsScreenSharing(val) {
-    isScreenSharing = val;
+    return true;
 }
