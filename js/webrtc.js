@@ -29,14 +29,20 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Cria canais base para a comunicação (Voz e Vídeo da câmara)
+    // Otimização para alta qualidade de áudio e vídeo
     pc.addTransceiver('audio', { direction: 'sendrecv' });
     pc.addTransceiver('video', { direction: 'sendrecv' });
 
-    const localStream = getLocalStream();
-    if (localStream) {
-        localStream.getTracks().forEach(track => {
-            pc.addTrack(track, localStream);
+    const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
+    if (activeStream && activeStream.getTracks().length > 0) {
+        const senders = pc.getSenders();
+        activeStream.getTracks().forEach(track => {
+            const sender = senders.find(s => s.track && s.track.kind === track.kind);
+            if (sender) {
+                sender.replaceTrack(track);
+            } else {
+                pc.addTrack(track, activeStream);
+            }
         });
     }
 
@@ -109,7 +115,6 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
     }
 }
 
-// Nova função adaptada para lidar tanto com o vídeo quanto com o áudio do sistema/tela
 export async function replaceVideoTrackOnAll(newVideoTrack, newAudioTrack = null) {
     const localStream = getLocalStream();
     const localMicTrack = localStream ? localStream.getAudioTracks()[0] : null;
@@ -118,13 +123,11 @@ export async function replaceVideoTrackOnAll(newVideoTrack, newAudioTrack = null
         const pc = peers[remoteUser];
         const senders = pc.getSenders();
         
-        // Mantém a voz (microfone) no primeiro canal de áudio
         const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
         if (audioSender && localMicTrack) {
             audioSender.replaceTrack(localMicTrack);
         }
 
-        // Substitui ou adiciona o vídeo da tela
         const videoSender = senders.find(s => s.track && s.track.kind === 'video');
         if (videoSender) {
             await videoSender.replaceTrack(newVideoTrack);
@@ -132,17 +135,15 @@ export async function replaceVideoTrackOnAll(newVideoTrack, newAudioTrack = null
             pc.addTrack(newVideoTrack, getScreenStream() || localStream);
         }
 
-        // Se houver áudio da tela (jogo/sistema), adiciona como um canal secundário de áudio
         if (newAudioTrack) {
-            const screenAudioSender = senders.filter(s => s.track && s.track.kind === 'audio')[1];
-            if (screenAudioSender) {
-                await screenAudioSender.replaceTrack(newAudioTrack);
+            const allAudioSenders = senders.filter(s => s.track && s.track.kind === 'audio');
+            if (allAudioSenders.length > 1) {
+                allAudioSenders[1].replaceTrack(newAudioTrack);
             } else {
                 pc.addTrack(newAudioTrack, getScreenStream());
             }
         }
 
-        // Avisa o outro utilizador das novas faixas (Renegociação Essencial)
         try {
             if (pc.signalingState === "stable") {
                 const offer = await pc.createOffer();
@@ -150,7 +151,7 @@ export async function replaceVideoTrackOnAll(newVideoTrack, newAudioTrack = null
                 sendSignal({ type: 'offer', sdp: offer, sender: currentUserGlobal, target: remoteUser });
             }
         } catch (e) {
-            console.error(`Erro ao renegociar faixa de vídeo/áudio com ${remoteUser}:`, e);
+            console.error(`Erro ao renegociar faixa com ${remoteUser}:`, e);
         }
     }
 }
