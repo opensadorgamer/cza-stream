@@ -29,11 +29,22 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Adiciona estritamente o stream ativo (seja a tela compartilhada ou o stream local de áudio/vídeo)
+    // CORREÇÃO CRUCIAL: Adiciona transceptores preventivos de áudio e vídeo para fixar 
+    // a ordem das linhas de media (m-lines) desde o início, evitando o erro de SSL role e m-lines.
+    pc.addTransceiver('audio', { direction: 'sendrecv' });
+    pc.addTransceiver('video', { direction: 'sendrecv' });
+
+    // Associa as faixas locais ativas (se houver) aos remetentes existentes
     const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
     if (activeStream && activeStream.getTracks().length > 0) {
+        const senders = pc.getSenders();
         activeStream.getTracks().forEach(track => {
-            pc.addTrack(track, activeStream);
+            const sender = senders.find(s => s.track && s.track.kind === track.kind);
+            if (sender) {
+                sender.replaceTrack(track);
+            } else {
+                pc.addTrack(track, activeStream);
+            }
         });
     }
 
@@ -99,7 +110,7 @@ export async function handleSignalingData(data, currentUser, onRemoteStreamCallb
             }
         } else if (data.type === 'candidate') {
             if (data.candidate) {
-                if (pc.remoteDescription) {
+                if (pc.remoteDescription && pc.remoteDescription.type) {
                     await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {});
                 } else {
                     if (!iceCandidateQueues[remoteUser]) iceCandidateQueues[remoteUser] = [];
