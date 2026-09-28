@@ -29,19 +29,31 @@ export function createPeerConnectionForUser(remoteUser, currentUser, onRemoteStr
     peers[remoteUser] = pc;
     iceCandidateQueues[remoteUser] = [];
 
-    // Otimização para alta qualidade de áudio e vídeo
+    // Criação explícita de transceivers dedicados para evitar conflitos de canais
     pc.addTransceiver('audio', { direction: 'sendrecv' });
     pc.addTransceiver('video', { direction: 'sendrecv' });
+    // Transceiver dedicado secundário para o áudio da tela (evita que o microfone seja sobrescrito)
+    pc.addTransceiver('audio', { direction: 'sendrecv' });
 
-    const activeStream = getIsScreenSharing() ? getScreenStream() : getLocalStream();
-    if (activeStream && activeStream.getTracks().length > 0) {
+    // Associa imediatamente o stream local ativo (câmara e microfone)
+    const localStream = getLocalStream();
+    if (localStream && localStream.getTracks().length > 0) {
         const senders = pc.getSenders();
-        activeStream.getTracks().forEach(track => {
-            const sender = senders.find(s => s.track && s.track.kind === track.kind);
-            if (sender) {
-                sender.replaceTrack(track);
-            } else {
-                pc.addTrack(track, activeStream);
+        localStream.getTracks().forEach(track => {
+            if (track.kind === 'audio') {
+                const audioSender = senders.find(s => s.track === null && s.sender?.track?.kind === 'audio') || senders.filter(s => s.track?.kind === 'audio')[0];
+                if (audioSender && !audioSender.track) {
+                    audioSender.replaceTrack(track);
+                } else {
+                    pc.addTrack(track, localStream);
+                }
+            } else if (track.kind === 'video') {
+                const videoSender = senders.find(s => s.track === null && s.sender?.track?.kind === 'video') || senders.filter(s => s.track?.kind === 'video')[0];
+                if (videoSender && !videoSender.track) {
+                    videoSender.replaceTrack(track);
+                } else {
+                    pc.addTrack(track, localStream);
+                }
             }
         });
     }
@@ -123,27 +135,40 @@ export async function replaceVideoTrackOnAll(newVideoTrack, newAudioTrack = null
         const pc = peers[remoteUser];
         const senders = pc.getSenders();
         
-        const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-        if (audioSender && localMicTrack) {
-            audioSender.replaceTrack(localMicTrack);
+        // Garante que o primeiro canal de áudio mantém SEMPRE o microfone ativo e intacto
+        const audioSenders = senders.filter(s => s.track && s.track.kind === 'audio' || s.dtmf);
+        const primaryAudioSender = senders.find(s => s.track?.kind === 'audio') || audioSenders[0];
+        
+        if (primaryAudioSender && localMicTrack) {
+            await primaryAudioSender.replaceTrack(localMicTrack);
+        } else if (localMicTrack) {
+            pc.addTrack(localMicTrack, localStream);
         }
 
-        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        // Gere o vídeo (câmara ou tela)
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video') || senders.find(s => s.dtmf === null && s.track?.kind === 'video');
         if (videoSender) {
             await videoSender.replaceTrack(newVideoTrack);
         } else {
             pc.addTrack(newVideoTrack, getScreenStream() || localStream);
         }
 
+        // Gere o áudio secundário da tela (jogo/sistema) no segundo canal dedicado
+        const allAudioSenders = senders.filter(s => s.track?.kind === 'audio' || s.dtmf === null);
         if (newAudioTrack) {
-            const allAudioSenders = senders.filter(s => s.track && s.track.kind === 'audio');
             if (allAudioSenders.length > 1) {
-                allAudioSenders[1].replaceTrack(newAudioTrack);
+                await allAudioSenders[1].replaceTrack(newAudioTrack);
             } else {
                 pc.addTrack(newAudioTrack, getScreenStream());
             }
+        } else {
+            // Se fechou a tela, limpa o segundo canal de áudio com segurança
+            if (allAudioSenders.length > 1 && allAudioSenders[1].track) {
+                await allAudioSenders[1].replaceTrack(null);
+            }
         }
 
+        // Renegociação SDP segura para propagar as alterações a ambos os pares
         try {
             if (pc.signalingState === "stable") {
                 const offer = await pc.createOffer();
